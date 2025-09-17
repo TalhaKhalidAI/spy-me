@@ -255,6 +255,7 @@ const AdminPanel = () => {
   };
 
   let refresh_client = () => {
+    
     setRefresh((prev) => !prev);
   };
 
@@ -328,6 +329,11 @@ useEffect(() => {
   // ------------Update Logic start----------------
 
   let update_data = async () => {
+    setSelectedUserData(prev => {
+  if (!prev[selectedUserId]) return prev;
+  const { error, ...rest } = prev[selectedUserId]; // remove only error
+  return { ...prev, [selectedUserId]: rest };
+});
     if (!peerRef.current[selectedUserId]) {
       createPeerForUser(selectedUserId);
       showPeerForUser();
@@ -419,6 +425,7 @@ useEffect(() => {
             try {
               await peerRef.current[id].addIceCandidate(ice);
             } catch (err) {
+              setSelectedUserData((prev)=>({...prev,[id]:{"error":err}}))
               console.error("Failed to add ICE candidate", err);
             }
           }
@@ -426,6 +433,7 @@ useEffect(() => {
      
         console.log("Answer successfully applied for", id);
       } catch (err) {
+         setSelectedUserData((prev)=>({...prev,[id]:{"error":err}}))
         console.error("Error handling answer:", err);
       }finally{
         refresh_client()
@@ -491,6 +499,7 @@ useEffect(() => {
           clients={clients}
           peerRef={peerRef}
           updatingUsers={updatingUsers}
+          Scd={selectedUserData}
           onView={async (id) => {
             setSelectUserId(id);
             try {

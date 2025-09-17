@@ -161,6 +161,7 @@ addStream(stream) {
 
   getStatus() {
     if (!this.peer) {
+      
       return {
         peerConnectionState: "not-created",
         iceConnectionState: "not-created",
@@ -168,6 +169,7 @@ addStream(stream) {
         videoActive: false,
         audioActive: false,
       };
+      
     }
 
     return {

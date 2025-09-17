@@ -6,6 +6,9 @@ import { getClients, updateAnswer } from "../Helper/Requests";
 let  baseURL=import.meta.env.VITE_API_URL
 
 const ClientConfig = () => {
+  const localStreamRef = useRef(null);   // <-- ADD THIS
+  const mediaReleasedRef = useRef(false);
+
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(
     localStorage.getItem("selectedClientId") || ""
@@ -17,6 +20,13 @@ const ClientConfig = () => {
   const creatingPeerRef = useRef(false);
   const autoAnsweringRef = useRef(false);
 
+const stopMediaTracks = () => {
+  if (localStreamRef.current) {
+    localStreamRef.current.getTracks().forEach(track => track.stop());
+    localStreamRef.current = null;
+    console.log("Mic/Camera released ✅");
+  }
+};
   const createPeerForUser = () => {
     if (creatingPeerRef.current) return;
     creatingPeerRef.current = true;
@@ -47,8 +57,10 @@ const ClientConfig = () => {
         return false;
       }
     }
+    stopMediaTracks()
     return false;
   };
+
 
   const fetchClients = async () => {
     try {
@@ -103,11 +115,11 @@ const ClientConfig = () => {
   //   fetchClients();
   // }, []);
 
-  // Auto peer status check every 10s
+  // Auto peer status check every 5s
   useEffect(() => {
     const interval = setInterval(() => {
       fetchClients();
-    }, 10000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [selectedClient, activeClientId]);
@@ -122,7 +134,7 @@ const ClientConfig = () => {
         audio: true,
         video: false,
       });
-
+      localStreamRef.current=localStream
       const ans = await peerRef.current.createAnswer(
         { type: "offer", sdp: clientDetails.sdp },
         clientDetails.ice,
@@ -147,6 +159,7 @@ const ClientConfig = () => {
     } catch (err) {
       console.error("Error auto-answering:", err);
     } finally {
+      
       autoAnsweringRef.current = false;
     }
   };
@@ -164,12 +177,28 @@ useEffect(() => {
 
     const localState = peerRef.current?.getStatus()?.peerConnectionState;
     if (localState !== "connected" && localState !== "connecting") {
+           
       if (lastSdpRef.current !== clientData.sdp) {
         console.log("New SDP detected, triggering auto-answer");
         lastSdpRef.current = clientData.sdp;
         handleAutoAnswer(clientData);
       }
+      
     }
+  if (
+    localState === "not-created" ||
+    localState === "disconnected" ||
+    localState === "failed" ||
+    localState === "closed"
+  ) {
+    if (!mediaReleasedRef.current) {
+      stopMediaTracks();
+      mediaReleasedRef.current = true; // mark released
+    }
+  } else {
+    // reset when back to active states
+    mediaReleasedRef.current = false;
+  }
   };
 
   return () => evtSource.close();
@@ -179,7 +208,7 @@ useEffect(() => {
 
   //---------------- UI ----------------
   if (selectedClient) return null;
-
+git 
   return (
     <div className="p-4 max-w-md mx-auto">
       <h3 className="mb-2 font-semibold">Select Client</h3>

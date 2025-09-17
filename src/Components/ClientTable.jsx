@@ -20,7 +20,8 @@ const ClientTable = ({
   all_status,
   hangup_call,
   audio_modal,
-  Ccid
+  Ccid,
+  Scd
 }) => {
   const [sortConfig, setSortConfig] = useState({ key: "id", direction: "asc" });
   const [filter, setFilter] = useState("");
@@ -250,6 +251,7 @@ const ClientTable = ({
                         </button>
                         <button
                           disabled={
+                            Scd[id]?.error ||
                             !peerRef.current[id] ||
                             updatingUsers[id] ||
                             (!details?.sdp && !(details?.ice?.length > 0)) ||
