@@ -208,7 +208,7 @@ useEffect(() => {
 
   //---------------- UI ----------------
   if (selectedClient) return null;
-git 
+
   return (
     <div className="p-4 max-w-md mx-auto">
       <h3 className="mb-2 font-semibold">Select Client</h3>
