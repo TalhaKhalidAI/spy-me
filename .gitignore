@@ -26,3 +26,4 @@ __pycache__
 .env
 Spy-me-backend/config
 *.env
+Spy-me-backend/.venv/*
