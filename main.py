@@ -10,7 +10,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from App.api.v1 import v1_router
 from App.core.settings import settings
 from App.core.LoggingInit import get_core_logger
-from  websocket.webrtcWebSocket import websocket_endpoint
+from  websocket.webrtcWebSockSignal import websocket_endpoint
 
 # Initialize Logger
 logger = get_core_logger(__name__)

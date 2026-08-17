@@ -212,7 +212,7 @@ class IORTCFastAPIHelper:
         peer_id: Optional[str] = None,
         password: Optional[str] = None,
     ) -> Tuple[str, RTCPeerConnection]:
-        
+     
         if self.config.enable_rate_limiting and not self.rate_limiter.is_allowed(room_id):
             raise ValueError("Rate limit exceeded")
         
@@ -575,16 +575,91 @@ class IORTCFastAPIHelper:
             "type": peer_info.pc.localDescription.type
         }
 
-    async def handle_answer(self, peer_id: str, sdp: str):
+# In iortc_helper.py
+
+    async def handle_offer(self, peer_id: str, sdp: str) -> Dict[str, str]:
+        """Handle an SDP offer and return answer."""
         peer_info = self.peers.get(peer_id)
         if not peer_info:
-            raise ValueError(f"Peer {peer_id} not found")
+            raise ValueError(f"Peer '{peer_id}' not found")
         
         if not SDPValidator.validate_sdp(sdp):
             raise ValueError("Invalid SDP format")
         
-        answer = RTCSessionDescription(sdp=sdp, type="answer")
-        await peer_info.pc.setRemoteDescription(answer)
+        # ✅ Check signaling state BEFORE setting remote description
+        if peer_info.pc.signalingState == "have-local-offer":
+            raise ValueError(
+                f"Peer '{peer_id}' is in signaling state 'have-local-offer'. "
+                "This endpoint expects an OFFER. If you have an ANSWER, use /answer endpoint instead."
+            )
+        
+        if peer_info.pc.signalingState == "stable" and not peer_info.pc.remoteDescription:
+            # Valid state for receiving an offer
+            pass
+        elif peer_info.pc.signalingState not in ["stable"]:
+            raise ValueError(
+                f"Peer '{peer_id}' cannot handle offer in signaling state '{peer_info.pc.signalingState}'. "
+                f"Expected 'stable'."
+            )
+        
+        try:
+            offer = RTCSessionDescription(sdp=sdp, type="offer")
+            await peer_info.pc.setRemoteDescription(offer)
+            
+            answer = await peer_info.pc.createAnswer()
+            await peer_info.pc.setLocalDescription(answer)
+            
+            if peer_id in self._ice_events:
+                try:
+                    await asyncio.wait_for(
+                        self._ice_events[peer_id].wait(),
+                        timeout=self.config.ice_timeout_seconds
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"ICE gathering timeout for {peer_id}")
+            
+            return {
+                "sdp": peer_info.pc.localDescription.sdp,
+                "type": peer_info.pc.localDescription.type
+            }
+        except Exception as e:
+            logger.error(f"Handle offer failed for {peer_id}: {e}")
+            raise ValueError(f"Failed to handle offer: {str(e)}")
+
+
+    async def handle_answer(self, peer_id: str, sdp: str):
+        """Handle an SDP answer."""
+        peer_info = self.peers.get(peer_id)
+        if not peer_info:
+            raise ValueError(f"Peer '{peer_id}' not found")
+        
+        if not SDPValidator.validate_sdp(sdp):
+            raise ValueError("Invalid SDP format")
+        
+        # ✅ Check signaling state BEFORE setting remote description
+        if peer_info.pc.signalingState == "have-remote-offer":
+            # Valid state for receiving an answer
+            pass
+        elif peer_info.pc.signalingState == "stable":
+            raise ValueError(
+                f"Peer '{peer_id}' is in signaling state 'stable' with no pending offer. "
+                "You need to create an offer first using /offer endpoint, then send the answer."
+            )
+        elif peer_info.pc.signalingState == "have-local-offer":
+            # ✅ This is the correct state for receiving an answer!
+            pass
+        else:
+            raise ValueError(
+                f"Peer '{peer_id}' cannot handle answer in signaling state '{peer_info.pc.signalingState}'. "
+                f"Expected 'have-local-offer'."
+            )
+        
+        try:
+            answer = RTCSessionDescription(sdp=sdp, type="answer")
+            await peer_info.pc.setRemoteDescription(answer)
+        except Exception as e:
+            logger.error(f"Handle answer failed for {peer_id}: {e}")
+            raise ValueError(f"Failed to handle answer: {str(e)}")
 
     async def add_ice_candidate(self, peer_id: str, candidate: Dict):
         peer_info = self.peers.get(peer_id)
@@ -602,26 +677,61 @@ class IORTCFastAPIHelper:
             peer.last_heartbeat = time.time()
 
     # ============== Renegotiation ==============
+
     async def renegotiate(self, peer_id: str) -> Dict[str, str]:
+        """Renegotiate connection with a peer."""
         peer_info = self.peers.get(peer_id)
         if not peer_info:
-            raise ValueError(f"Peer {peer_id} not found")
+            raise ValueError(f"Peer '{peer_id}' not found")
         
-        offer = await peer_info.pc.createOffer()
-        await peer_info.pc.setLocalDescription(offer)
+        # ✅ Validate peer state
+        if peer_info.disconnected:
+            raise ValueError(f"Peer '{peer_id}' is disconnected")
         
-        if peer_id in self._ice_events:
-            await asyncio.wait_for(
-                self._ice_events[peer_id].wait(),
-                timeout=self.config.ice_timeout_seconds
+        # ✅ Validate connection state for renegotiation
+        valid_states = ["connected", "completed", "checking"]
+        if peer_info.pc.connectionState not in valid_states:
+            raise ValueError(
+                f"Peer '{peer_id}' cannot renegotiate - connection state is '{peer_info.pc.connectionState}'. "
+                f"Expected: {', '.join(valid_states)}"
             )
         
-        return {
-            "sdp": peer_info.pc.localDescription.sdp,
-            "type": peer_info.pc.localDescription.type,
-            "renegotiation": True
-        }
-
+        # ✅ Validate ICE state
+        valid_ice_states = ["connected", "completed", "checking"]
+        if peer_info.pc.iceConnectionState not in valid_ice_states:
+            raise ValueError(
+                f"Peer '{peer_id}' cannot renegotiate - ICE state is '{peer_info.pc.iceConnectionState}'. "
+                f"Expected: {', '.join(valid_ice_states)}"
+            )
+        
+        try:
+            # ✅ Create offer
+            offer = await peer_info.pc.createOffer()
+            await peer_info.pc.setLocalDescription(offer)
+            
+            # ✅ Wait for ICE gathering (with timeout)
+            if peer_id in self._ice_events:
+                try:
+                    await asyncio.wait_for(
+                        self._ice_events[peer_id].wait(),
+                        timeout=self.config.ice_timeout_seconds
+                    )
+                    logger.info(f"ICE gathering complete for {peer_id} during renegotiation")
+                except asyncio.TimeoutError:
+                    logger.warning(f"ICE gathering timeout for {peer_id} during renegotiation")
+                    # Continue - we can still return the offer
+            
+            # ✅ Return result
+            return {
+                "sdp": peer_info.pc.localDescription.sdp,
+                "type": peer_info.pc.localDescription.type,
+                "renegotiation": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Renegotiation failed for {peer_id}: {e}")
+            raise ValueError(f"Renegotiation failed: {str(e)}")
+        
     # ============== Internal ==============
     async def _close_peer(self, peer_id: str):
         peer_info = self.peers.get(peer_id)
@@ -684,7 +794,69 @@ class IORTCFastAPIHelper:
             "total_tracks": sum(len(p.tracks) for p in self.peers.values())
         }
 
-
+    async def list_rooms(self) -> List[Dict]:
+        """List all rooms with basic info"""
+        return [
+            {
+                "room_id": room_id,
+                "peer_count": len(room.peers),
+                "created_at": room.created_at,
+                "password_protected": room.password is not None
+            }
+            for room_id, room in self.rooms.items()
+        ]
+    async def get_peer_info(self, peer_id: str) -> Optional[Dict]:
+        """Get peer details as dict"""
+        peer = self.peers.get(peer_id)
+        if not peer:
+            return None
+        
+        return {
+            "peer_id": peer.peer_id,
+            "room_id": peer.room_id,
+            "role": peer.role.value,
+            "connected_at": peer.connected_at,
+            "last_heartbeat": peer.last_heartbeat,
+            "disconnected": peer.disconnected,
+            "track_count": len(peer.tracks),
+            "tracks": [
+                {
+                    "track_id": t.track_id,
+                    "kind": t.kind,
+                    "enabled": t.enabled
+                }
+                for t in peer.tracks
+            ]
+        }
+    async def auto_connect(self, peer_a_id: str, peer_b_id: str) -> Dict:
+        """Auto-connect two peers"""
+        peer_a = self.peers.get(peer_a_id)
+        peer_b = self.peers.get(peer_b_id)
+        
+        if not peer_a:
+            return {"success": False, "error": f"Peer {peer_a_id} not found"}
+        if not peer_b:
+            return {"success": False, "error": f"Peer {peer_b_id} not found"}
+        
+        try:
+            # Create offer from peer A
+            offer = await self.create_offer(peer_a_id)
+            
+            # Handle offer on peer B
+            answer = await self.handle_offer(peer_b_id, offer["sdp"])
+            
+            # Handle answer on peer A
+            await self.handle_answer(peer_a_id, answer["sdp"])
+            
+            return {
+                "success": True,
+                "peer_a_id": peer_a_id,
+                "peer_b_id": peer_b_id,
+                "offer": offer,
+                "answer": answer
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 # ============== Factory ==============
 def create_helper(config: Optional[IORTCConfig] = None) -> IORTCFastAPIHelper:
     return IORTCFastAPIHelper(config)

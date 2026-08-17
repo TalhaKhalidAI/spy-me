@@ -1,5 +1,5 @@
 # App/api/v1/webRtcRoute.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from typing import Optional, List, Dict
 import logging
 
@@ -30,7 +30,7 @@ async def get_repo():
 async def create_room(
     room_data: RoomCreate,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED: use get_repo
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Create a WebRTC room"""
     try:
@@ -48,7 +48,7 @@ async def create_room(
 @router.get("/rooms")
 async def list_rooms(
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """List all rooms"""
     rooms = await repo.list_rooms()
@@ -64,33 +64,64 @@ async def list_rooms(
 async def get_room(
     room_id: str,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Get room details"""
-    room = await repo.get_room(room_id)
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
-    return {
-        "room_id": room.room_id,
-        "peer_count": len(room.peers),
-        "created_at": room.created_at,
-        "password_protected": room.password is not None,
-        "peers": [
-            {"peer_id": pid, "role": p.role.value, "track_count": len(p.tracks)}
-            for pid, p in room.peers.items()
-        ]
-    }
+    try:
+        room = await repo.get_room(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail=f"Room '{room_id}' not found")
+        
+        return {
+            "room_id": room.room_id,
+            "peer_count": len(room.peers),
+            "created_at": room.created_at,
+            "password_protected": room.password is not None,
+            "peers": [
+                {
+                    "peer_id": pid,
+                    "role": p.role.value,
+                    "track_count": len(p.tracks),
+                    "connected_at": p.connected_at
+                }
+                for pid, p in room.peers.items()
+            ]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in get_room: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/rooms/{room_id}/stats")
+async def get_room_stats(
+    room_id: str,
+    current_user: dict = Depends(get_current_user),
+    repo: WebRTCRepository = Depends(get_repo)
+):
+    """Get detailed statistics for a room"""
+    try:
+        stats = await repo.get_room_stats(room_id)
+        if not stats:
+            raise HTTPException(status_code=404, detail=f"Room '{room_id}' not found")
+        return stats
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.delete("/rooms/{room_id}")
 async def delete_room(
     room_id: str,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Delete a room"""
-    await repo.delete_room(room_id)
-    return {"success": True}
+    try:
+        await repo.delete_room(room_id)
+        return {"success": True, "room_id": room_id}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # ============== PEER ==============
@@ -100,19 +131,15 @@ async def create_peer(
     room_id: str,
     peer_data: PeerCreate,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Create a peer in a room"""
     try:
-        role_map = {
-            "publisher": PeerRole.PUBLISHER,
-            "subscriber": PeerRole.SUBSCRIBER,
-            "both": PeerRole.BOTH
-        }
-        role = role_map.get(peer_data.role.value, PeerRole.BOTH)
-        
         peer_id, pc = await repo.create_peer(
-            room_id, peer_data.peer_id, role, peer_data.password
+            room_id,
+            peer_data.peer_id,
+            peer_data.role,
+            peer_data.password
         )
         return {
             "success": True,
@@ -128,24 +155,87 @@ async def create_peer(
 async def get_peer(
     peer_id: str,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Get peer details"""
-    peer = await repo.get_peer_info(peer_id)
-    if not peer:
-        raise HTTPException(status_code=404, detail="Peer not found")
-    return peer
+    try:
+        peer = await repo.get_peer_info(peer_id)
+        if not peer:
+            raise HTTPException(status_code=404, detail=f"Peer '{peer_id}' not found")
+        return peer
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.delete("/peers/{peer_id}")
 async def disconnect_peer(
     peer_id: str,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Disconnect a peer"""
-    await repo.disconnect_peer(peer_id)
-    return {"success": True, "peer_id": peer_id}
+    try:
+        await repo.disconnect_peer(peer_id)
+        return {"success": True, "peer_id": peer_id}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ============== PEER HEARTBEAT ==============
+
+@router.post("/peers/{peer_id}/heartbeat")
+async def update_peer_heartbeat(
+    peer_id: str,
+    current_user: dict = Depends(get_current_user),
+    repo: WebRTCRepository = Depends(get_repo)
+):
+    """Update peer heartbeat timestamp"""
+    try:
+        await repo.update_heartbeat(peer_id)
+        return {"success": True, "peer_id": peer_id}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ============== PEER STATS ==============
+
+@router.get("/peers/{peer_id}/stats")
+async def get_peer_stats(
+    peer_id: str,
+    current_user: dict = Depends(get_current_user),
+    repo: WebRTCRepository = Depends(get_repo)
+):
+    """Get WebRTC statistics for a peer"""
+    try:
+        stats = await repo.get_peer_stats(peer_id)
+        if not stats:
+            raise HTTPException(status_code=404, detail=f"Peer '{peer_id}' not found or no stats")
+        return {"peer_id": peer_id, "stats": stats}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ============== RENEGOTIATION ==============
+
+# In webRtcRoute.py
+
+@router.post("/peers/{peer_id}/renegotiate")
+async def renegotiate_peer(
+    peer_id: str,
+    current_user: dict = Depends(get_current_user),
+    repo: WebRTCRepository = Depends(get_repo)
+):
+    """Renegotiate connection with a peer"""
+    try:
+        result = await repo.renegotiate(peer_id)
+        return {"success": True, **result}
+    except ValueError as e:
+        # ✅ Handle validation errors properly
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # ✅ Handle unexpected errors
+        logger.error(f"Unexpected error in renegotiate: {e}")
+        raise HTTPException(status_code=500, detail=f"Renegotiation failed: {str(e)}")
 
 
 # ============== TRACK ==============
@@ -154,14 +244,18 @@ async def disconnect_peer(
 async def get_peer_tracks(
     peer_id: str,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Get all tracks for a peer"""
-    tracks = await repo.get_tracks(peer_id)
-    return [
-        {"track_id": t.track_id, "kind": t.kind, "enabled": t.enabled}
-        for t in tracks
-    ]
+    try:
+        tracks = await repo.get_peer_tracks(peer_id)
+        return {
+            "peer_id": peer_id,
+            "tracks": tracks,
+            "count": len(tracks)
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post("/peers/{peer_id}/tracks/{track_id}/enable")
@@ -170,11 +264,14 @@ async def enable_track(
     track_id: str,
     enabled: bool = True,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Enable or disable a track"""
-    await repo.enable_track(peer_id, track_id, enabled)
-    return {"success": True, "enabled": enabled}
+    try:
+        await repo.enable_track(peer_id, track_id, enabled)
+        return {"success": True, "peer_id": peer_id, "track_id": track_id, "enabled": enabled}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.delete("/peers/{peer_id}/tracks/{track_id}")
@@ -182,11 +279,14 @@ async def remove_track(
     peer_id: str,
     track_id: str,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Remove a track"""
-    await repo.remove_track(peer_id, track_id)
-    return {"success": True}
+    try:
+        await repo.remove_track(peer_id, track_id)
+        return {"success": True}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # ============== SIGNALING ==============
@@ -195,7 +295,7 @@ async def remove_track(
 async def create_offer(
     peer_id: str,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Create an SDP offer"""
     try:
@@ -210,7 +310,7 @@ async def handle_offer(
     peer_id: str,
     request: SDPRequest,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Handle an SDP offer and return answer"""
     try:
@@ -225,7 +325,7 @@ async def handle_answer(
     peer_id: str,
     request: SDPRequest,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Handle an SDP answer"""
     try:
@@ -240,7 +340,7 @@ async def add_ice_candidate(
     peer_id: str,
     request: ICECandidateRequest,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Add an ICE candidate"""
     try:
@@ -256,7 +356,7 @@ async def add_ice_candidate(
 async def auto_connect_peers(
     request: OfferRequest,
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Auto-connect two peers"""
     result = await repo.auto_connect(request.peer_a_id, request.target_peer_id)
@@ -265,12 +365,26 @@ async def auto_connect_peers(
     return result
 
 
+# ============== CONNECTION STATUS ==============
+
+@router.get("/peers/{peer_a_id}/connected/{peer_b_id}")
+async def check_connection_status(
+    peer_a_id: str,
+    peer_b_id: str,
+    current_user: dict = Depends(get_current_user),
+    repo: WebRTCRepository = Depends(get_repo)
+):
+    """Check if two peers are connected"""
+    result = await repo.check_connection_status(peer_a_id, peer_b_id)
+    return result
+
+
 # ============== STATS ==============
 
 @router.get("/stats")
 async def get_stats(
     current_user: dict = Depends(get_current_user),
-    repo: WebRTCRepository = Depends(get_repo)  # ✅ FIXED
+    repo: WebRTCRepository = Depends(get_repo)
 ):
     """Get global WebRTC statistics"""
     return await repo.get_global_stats()
