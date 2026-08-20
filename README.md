@@ -1,268 +1,360 @@
- # FastAPI User Authentication & Management System
+# 🚀 OAuth + WebRTC SFU API Boilerplate
+**By Talha Khalid**
 
-A production-ready FastAPI boilerplate with SQLite database, JWT authentication, and role-based access control.
+A professional, production-ready API boilerplate built with **Express**, **Prisma (PostgreSQL)**, **Argon2**, **Passport**, **Zod**, **Winston**, and **mediasoup** for real-time WebRTC communication.
 
-## Made by Talha Khalid
+---
 
-## Features
+## ✨ Features
 
-### Authentication
-- JWT-based authentication with Argon2 password hashing
-- Login/Signup with email validation
-- Password strength validation (uppercase, lowercase, digit, special character)
-- Token-based session management
+### 🔐 Authentication
+- Password hashing with **Argon2id** (OWASP recommended).
+- JWT Access & Refresh token rotation (with cookie support).
+- Social Auth: Google & GitHub via Passport.js.
+- Soft delete (users marked as deleted, never permanently removed).
+- Profile management (update username, avatar, etc.).
 
-### User Management
-- User registration and login
-- Profile viewing and editing
-- Password change and reset (admin can reset any user password)
-- Account activation/deactivation
-- Soft delete with restore capability
+### 🎥 WebRTC SFU (Selective Forwarding Unit)
+- Built with **mediasoup v3** for real-time video/audio conferencing.
+- **WebSocket signaling** (Socket.IO) for transport/producer/consumer control.
+- HTTP REST API for room and peer management.
+- Supports:
+  - Room creation/deletion
+  - Peer creation/deletion
+  - Producer/Consumer management
+  - Transport creation (send/recv)
+  - DTLS handshake & ICE negotiation
 
-### Role-Based Access Control
-- **Admin Role**: Full access to all user data and management
-- **User Role**: Limited to own profile management
+### 🛠 Database
+- **Prisma 7** ORM with PostgreSQL.
+- Type-safe database queries.
+- Automatic connection pooling.
 
-### Security
-- Password hashing with Argon2
-- JWT tokens with configurable expiration
-- Role-based authorization
-- Input validation with Pydantic
-- SQL injection protection via SQLAlchemy
+### 🛡️ Security
+- **Helmet.js** for secure HTTP headers.
+- CORS pre-configured.
+- Rate limiting (configurable).
+- Environment variable validation with **Zod**.
 
-## Tech Stack
+### 📝 Logging
+- Structured logging with **Winston**.
+- Daily log rotation (application, error, audit logs).
+- HTTP request logging with Morgan.
 
-- **Framework**: FastAPI
-- **Database**: SQLite (via SQLAlchemy)
-- **Authentication**: JWT with Argon2 password hashing
-- **Validation**: Pydantic v2
-- **Rate Limiting**: SlowAPI
-- **Logging**: Python logging
+### 🚦 Production Utilities
+- Global error handling middleware.
+- Request validation middleware (Zod).
+- Health check endpoint (`/health`).
+- Graceful shutdown handlers.
+- Docker support (optional).
 
-## Installation
+---
 
-### 1. Clone the repository
+## 🛠 Prerequisites
+
+- Node.js >= 18.0.0
+- PostgreSQL >= 14
+- npm or pnpm
+- (Optional) Docker & Docker Compose
+
+---
+
+## 🚀 Getting Started
+
+### 1. Installation
+
 ```bash
-git clone https://github.com/iot-Noob/API-Boiler-Plate.git
-cd API-Boiler-Plate
+git clone <your-repo>
+cd <your-repo>
+npm install
 ```
 
-### 2. Create virtual environment
+### 2. Environment Setup
+
+Copy `.env.example` to `.env` and fill in the values:
+
 ```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or
-venv\Scripts\activate  # Windows
+# Server
+JWT_SECRET=Your hex key
+JWT_REFRESH_SECRET=secret
+DATABASE_URL="postgresql: "
+PORT=5050
+RTC_MIN_PORT=2000
+RTC_MAX_PORT=3000
+LOG_LEVEL="info"
+MAX_TRANSPORTS_PER_PEER=10
+HTTPS_ENABLED=true
+SSL_KEY_PATH="./src/certs/status.lab.mli.key"
+SSL_CERT_PATH="./src/certs/status.lab.mli.crt"
+
 ```
 
-### 3. Install dependencies
+### 3. Database Initialization
+
 ```bash
-pip install -r requirements.txt
+# Generate Prisma Client
+npm run db:generate
+
+# Run migrations (ensure PostgreSQL is running)
+npm run db:migrate
+
+# (Optional) Seed the database
+npm run db:seed
 ```
 
-### 4. Configure environment
-Edit the `.env` file with your settings:
+### 4. Run Development Server
 
-```env
-# Security (REQUIRED)
-SECRET_KEY=your-secret-key-here-min-32-chars-long!
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=790
-
-# Database
-SQLITE_DATABASE_URL=sqlite:///./app.db
-
-# Logging
-LOG_FILEPATH=./logs/
-
-# Rate Limiting
-RATE_LIMIT_DEFAULT=100/minute
-
-# Maintenance
-KILL_SWITCH_ENABLED=false
-
-# Argon2 Hashing
-MEMORY_COST=65536
-PARALLELISM=2
-HASH_LENGTH=32
-SALT_LENGTH=16
-
-# Admin User (REQUIRED)
-ADMIN_USERNAME=admin
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=Admin@123
-
-# Environment
-ENVIRONMENT=development
-ALLOWED_ORIGINS=*
-```
-
-### 5. Run the application
 ```bash
-uvicorn main:app --reload
+npm run dev
 ```
 
-The API will be available at `http://localhost:8000`
+The server will start at:
+- **API:** `http://localhost:3000/api/v1`
+- **Swagger Docs:** `http://localhost:3000/api-docs`
+- **WebSocket (Socket.IO):** `ws://localhost:3000`
+- **Health Check:** `http://localhost:3000/health`
 
-## API Endpoints
+---
 
-### Authentication
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/app/v1/users/signup` | Register new user |
-| POST | `/app/v1/users/login` | Login and get token |
+## 🏗 Project Structure
 
-### User Management
-| Method | Endpoint | Description | Access |
-|--------|----------|-------------|--------|
-| GET | `/app/v1/users/me` | Get current user profile | User |
-| GET | `/app/v1/users/` | List all users | Admin |
-| GET | `/app/v1/users/{id}` | Get user by ID | User (own), Admin (any) |
-| PUT | `/app/v1/users/{id}` | Update user | User (own), Admin (any) |
-| DELETE | `/app/v1/users/{id}` | Delete user | User (own), Admin (any) |
-| POST | `/app/v1/users/change-password` | Change own password | User |
-| POST | `/app/v1/users/{id}/reset-password` | Reset user password | Admin |
-| POST | `/app/v1/users/{id}/activate` | Activate user | Admin |
-| POST | `/app/v1/users/{id}/deactivate` | Deactivate user | Admin |
-| GET | `/app/v1/users/deleted/list` | List deleted users | Admin |
-| POST | `/app/v1/users/{id}/restore` | Restore deleted user | Admin |
-
-### System
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check |
-
-## Usage Examples
-
-### 1. Register a new user
 ```bash
-curl -X POST http://localhost:8000/app/v1/users/signup \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "johndoe",
-    "email": "john@example.com",
-    "password": "Password@123",
-    "full_name": "John Doe"
-  }'
-```
-
-### 2. Login
-```bash
-curl -X POST http://localhost:8000/app/v1/users/login \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=johndoe&password=Password@123"
-```
-
-Response:
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer",
-  "user": {
-    "id": 2,
-    "username": "johndoe",
-    "email": "john@example.com",
-    "full_name": "John Doe",
-    "user_role": "user",
-    "is_active": true,
-    "disabled": false
-  }
-}
-```
-
-### 3. Get current user profile
-```bash
-curl -X GET http://localhost:8000/app/v1/users/me \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-```
-
-### 4. Update own profile
-```bash
-curl -X PUT http://localhost:8000/app/v1/users/2 \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "newemail@example.com",
-    "full_name": "John Updated"
-  }'
-```
-
-### 5. Admin - List all users
-```bash
-curl -X GET http://localhost:8000/app/v1/users/ \
-  -H "Authorization: Bearer ADMIN_ACCESS_TOKEN"
-```
-
-### 6. Admin - Reset user password
-```bash
-curl -X POST http://localhost:8000/app/v1/users/2/reset-password \
-  -H "Authorization: Bearer ADMIN_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "new_password": "NewPass@123"
-  }'
-```
-
-## Project Structure
-
-```
-GptMobal/
-├── App/
-│   ├── api/
-│   │   ├── dependencies/
-│   │   │   ├── auth.py          # JWT & password utilities
-│   │   │   └── sqlite_connector.py
+src/
+├── api/
+│   ├── controllers/
+│   │   ├── auth.controller.js      # Auth endpoints (register, login, refresh)
+│   │   ├── user.controller.js      # User profile management
+│   │   └── sfu.controller.js       # SFU/WebRTC REST endpoints
+│   ├── middleware/
+│   │   ├── auth.middleware.js      # JWT & role-based auth
+│   │   ├── error.middleware.js     # Global error handler
+│   │   └── validate.middleware.js  # Zod validation middleware
+│   ├── routes/
 │   │   └── v1/
-│   │       ├── Users.py         # User endpoints
-│   │       └── langChainsRoutes.py
-│   ├── core/
-│   │   ├── settings.py          # Configuration
-│   │   └── LoggingInit.py
-│   ├── models/
-│   │   └── userModels.py        # Pydantic models
-│   ├── repository/
-│   │   └── userRepository.py    # Database operations
-│   └── schemas/
-│       └── userSchemas.py
-├── main.py                      # Application entry point
-├── .env                         # Environment variables
-└── app.db                       # SQLite database (auto-created)
+│   │       ├── auth.routes.js      # /auth routes
+│   │       ├── user.routes.js      # /users routes
+│   │       ├── sfu.routes.js       # /sfu routes (rooms, producers, etc.)
+│   │       └── index.js            # Route aggregator
+│   ├── utils/
+│   │   ├── jwt.util.js             # JWT sign/verify helpers
+│   │   ├── logger.js               # Winston logger instance
+│   │   └── response.util.js        # Standardized API responses
+│   └── validators/
+│       ├── auth.validator.js       # Zod schemas for auth
+│       └── user.validator.js       # Zod schemas for user updates
+├── config/
+│   ├── env.js                      # Environment validation with Zod
+│   ├── passport.js                 # Passport strategies (Local, JWT, OAuth)
+│   ├── swagger.js                  # Swagger/OpenAPI configuration
+│   └── databases.js                # Prisma client instance
+├── services/
+│   ├── password.service.js         # Argon2 hashing
+│   └── mediasoup/                  # WebRTC SFU core
+│       ├── index.js                # SFU orchestrator
+│       └── managers/
+│           ├── WorkerManager.js    # mediasoup worker pool
+│           ├── RouterManager.js    # mediasoup router management
+│           ├── TransportManager.js # WebRTC transport management
+│           ├── ProducerManager.js  # Media producer management
+│           └── ConsumerManager.js  # Media consumer management
+└── server.js                       # App entry point (HTTP + WebSocket)
 ```
 
-## Environment Variables
+---
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| SECRET_KEY | Yes | - | JWT secret key (min 32 chars) |
-| ALGORITHM | Yes | HS256 | JWT algorithm |
-| ACCESS_TOKEN_EXPIRE_MINUTES | Yes | 790 | Token expiry time |
-| SQLITE_DATABASE_URL | Yes | sqlite:///./app.db | Database URL |
-| LOG_FILEPATH | Yes | ./logs/ | Logs directory |
-| RATE_LIMIT_DEFAULT | Yes | 100/minute | Rate limit |
-| KILL_SWITCH_ENABLED | No | false | Maintenance mode |
-| MEMORY_COST | Yes | 65536 | Argon2 memory cost |
-| PARALLELISM | Yes | 2 | Argon2 parallelism |
-| HASH_LENGTH | Yes | 32 | Argon2 hash length |
-| SALT_LENGTH | Yes | 16 | Argon2 salt length |
-| ADMIN_USERNAME | Yes | admin | Default admin username |
-| ADMIN_EMAIL | Yes | admin@example.com | Default admin email |
-| ADMIN_PASSWORD | Yes | Admin@123 | Default admin password |
-| ENVIRONMENT | No | development | Environment mode |
-| ALLOWED_ORIGINS | No | * | CORS origins |
+## 🔐 API Endpoints
 
-## Production Deployment
+### Authentication
 
-1. Set `ENVIRONMENT=production` in `.env`
-2. Set a strong `SECRET_KEY` (generate a random 64+ character string)
-3. Configure `ALLOWED_ORIGINS` with your frontend domain
-4. Use a production-grade database (PostgreSQL recommended)
-5. Enable HTTPS/SSL
-6. Configure proper CORS settings
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/v1/auth/register` | Register a new user | Public |
+| POST | `/api/v1/auth/login` | Login and get tokens | Public |
+| POST | `/api/v1/auth/refresh` | Refresh access token | Public |
+| GET | `/api/v1/auth/me` | Get current user profile | JWT |
+| GET | `/api/v1/auth/google` | Google OAuth login | Public |
+| GET | `/api/v1/auth/google/callback` | Google OAuth callback | Public |
+| GET | `/api/v1/auth/github` | GitHub OAuth login | Public |
+| GET | `/api/v1/auth/github/callback` | GitHub OAuth callback | Public |
 
-## License
+### Users
 
-MIT License
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/v1/users` | Get all users | JWT (Admin) |
+| PATCH | `/api/v1/users/update-me` | Update current user profile | JWT |
+| DELETE | `/api/v1/users/delete-me` | Soft delete current user | JWT |
+| GET | `/api/v1/users/deleted` | Get deleted users | JWT (Admin) |
+| POST | `/api/v1/users/restore/:id` | Restore deleted user | JWT (Admin) |
 
-## Author
+### WebRTC / SFU (Admin & Peer Management)
 
-**Talha Khalid**
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/v1/sfu/status` | Get SFU status | JWT |
+| POST | `/api/v1/sfu/start` | Start/Initialize SFU | JWT (Admin) |
+| POST | `/api/v1/sfu/stop` | Stop SFU | JWT (Admin) |
+| POST | `/api/v1/sfu/restart` | Restart SFU | JWT (Admin) |
+| GET | `/api/v1/sfu/stats` | Get SFU statistics | JWT |
+| GET | `/api/v1/sfu/health` | SFU health check | JWT |
+| GET | `/api/v1/sfu/capabilities` | Get RTP capabilities | JWT |
+| GET | `/api/v1/sfu/rooms` | List all rooms | JWT |
+| POST | `/api/v1/sfu/rooms` | Create a room | JWT (Admin) |
+| GET | `/api/v1/sfu/rooms/:roomId` | Get room details | JWT |
+| DELETE | `/api/v1/sfu/rooms/:roomId` | Delete a room | JWT (Admin) |
+| GET | `/api/v1/sfu/rooms/:roomId/producers` | List producers in a room | JWT |
+| GET | `/api/v1/sfu/rooms/:roomId/consumers` | List consumers in a room | JWT |
+| DELETE | `/api/v1/sfu/producers/:producerId` | Force close a producer | JWT (Admin) |
+| DELETE | `/api/v1/sfu/consumers/:consumerId` | Force close a consumer | JWT (Admin) |
+
+---
+
+## 🌐 OAuth Setup
+
+To enable Google/GitHub authentication:
+
+### Google OAuth
+1. Go to [Google Cloud Console](https://console.cloud.google.com/).
+2. Create a new project (or select existing).
+3. Enable the **Google+ API**.
+4. Create OAuth 2.0 credentials (Web application).
+5. Set Authorized redirect URIs to:
+   - `http://localhost:3000/api/v1/auth/google/callback`
+   - `https://yourdomain.com/api/v1/auth/google/callback`
+6. Copy `Client ID` and `Client Secret` to your `.env`.
+
+### GitHub OAuth
+1. Go to [GitHub Developer Settings](https://github.com/settings/developers).
+2. Click **New OAuth App**.
+3. Set Authorization callback URL to:
+   - `http://localhost:3000/api/v1/auth/github/callback`
+   - `https://yourdomain.com/api/v1/auth/github/callback`
+4. Copy `Client ID` and `Client Secret` to your `.env`.
+
+---
+
+## 📡 WebSocket Events (Socket.IO)
+
+The WebSocket server is integrated with the main HTTP server and handles real-time signaling for WebRTC.
+
+### Connection
+```javascript
+const socket = io('ws://localhost:3000');
+```
+
+### Client → Server Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `joinRoom` | `{ roomId }` | Join a WebRTC room |
+| `getRouterRtpCapabilities` | (none) | Get RTP capabilities |
+| `createSendTransport` | `{ roomId }` | Create a send transport |
+| `createRecvTransport` | `{ roomId }` | Create a receive transport |
+| `connectTransport` | `{ transportId, dtlsParameters }` | Complete DTLS handshake |
+| `produce` | `{ transportId, kind, rtpParameters, source }` | Publish media |
+| `consume` | `{ transportId, producerId, rtpCapabilities }` | Subscribe to media |
+| `pauseProducer` | `{ producerId }` | Pause a producer |
+| `resumeProducer` | `{ producerId }` | Resume a producer |
+| `pauseConsumer` | `{ consumerId }` | Pause a consumer |
+| `resumeConsumer` | `{ consumerId }` | Resume a consumer |
+| `closeProducer` | `{ producerId }` | Close a producer |
+| `closeConsumer` | `{ consumerId }` | Close a consumer |
+
+### Server → Client Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `newProducer` | `{ producerId, socketId, kind, source }` | New producer added |
+| `producerClosed` | `{ producerId }` | Producer closed |
+| `clientLeft` | `{ socketId, roomId }` | Client left the room |
+
+---
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+npm run test
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+---
+
+## 🐳 Docker Deployment
+
+```bash
+# Build the Docker image
+npm run docker:build
+
+# Run the container
+npm run docker:run
+
+# Or use docker-compose
+docker-compose up -d
+```
+
+---
+
+## 📝 Logging
+
+Logs are written to:
+- `logs/application-YYYY-MM-DD.log` — All logs (info and above)
+- `logs/error-YYYY-MM-DD.log` — Error logs only
+- `logs/audit-YYYY-MM-DD.log` — Audit trail (if enabled)
+- `logs/exceptions-YYYY-MM-DD.log` — Uncaught exceptions
+- `logs/rejections-YYYY-MM-DD.log` — Unhandled promise rejections
+
+Log rotation:
+- Files are rotated daily.
+- Old files are automatically archived and deleted after 14 days (configurable).
+
+---
+
+## 🛡️ Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | HTTP server port | `3000` |
+| `NODE_ENV` | Environment (`development`/`production`) | `development` |
+| `JWT_SECRET` | JWT access token secret | (required) |
+| `JWT_REFRESH_SECRET` | JWT refresh token secret | (required) |
+| `JWT_EXPIRES_IN` | Access token expiry | `15m` |
+| `JWT_REFRESH_EXPIRES_IN` | Refresh token expiry | `7d` |
+| `DATABASE_URL` | PostgreSQL connection string | (required) |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID | (optional) |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | (optional) |
+| `GITHUB_CLIENT_ID` | GitHub OAuth client ID | (optional) |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth client secret | (optional) |
+| `LISTEN_IP` | SFU listen IP | `0.0.0.0` |
+| `ANNOUNCED_IP` | SFU announced IP | `127.0.0.1` |
+| `RTC_MIN_PORT` | Min UDP port for RTC | `10000` |
+| `RTC_MAX_PORT` | Max UDP port for RTC | `20000` |
+| `WORKER_MAX` | Max mediasoup workers | `4` |
+| `MAX_TRANSPORTS_PER_PEER` | Max transports per peer | `10` |
+| `MAX_TRANSPORTS_PER_ROOM` | Max transports per room | `20` |
+| `TRANSPORT_TIMEOUT` | Transport inactivity timeout (ms) | `60000` |
+| `LOG_LEVEL` | Log level (`error`/`warn`/`info`/`http`/`debug`) | `info` |
+| `LOG_DIR` | Log directory | `logs` |
+| `ENABLE_AUDIT_LOG` | Enable audit logging | `true` |
+| `CORS_ORIGIN` | CORS allowed origin | `*` |
+
+---
+
+## 📄 License
+
+MIT © 2026 Talha Khalid
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/amazing-feature`).
+3. Commit your changes (`git commit -m 'Add amazing feature'`).
+4. Push to the branch (`git push origin feature/amazing-feature`).
+5. Open a Pull Request.

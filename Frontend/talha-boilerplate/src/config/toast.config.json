@@ -1,0 +1,22 @@
+{
+  "position": "top-right",
+  "autoClose": 3000,
+  "hideProgressBar": false,
+  "closeOnClick": true,
+  "pauseOnHover": true,
+  "draggable": true,
+  "pauseOnFocusLoss": true,
+  "closeButton": true,
+  "icon": true,
+  "theme": "colored",
+  "transition": "Slide",
+  "toastClassName": "react-toastify__toast",
+  "bodyClassName": "react-toastify__body",
+  "progressClassName": "react-toastify__progress",
+  "enableMultiContainer": false,
+  "containerId": null,
+  "limit": 5,
+  "stacked": false,
+  " newestOnTop": true,
+  "rtl": false
+}

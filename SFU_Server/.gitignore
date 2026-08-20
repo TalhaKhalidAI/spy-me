@@ -258,8 +258,3 @@ prisma/migrations/
 prisma/.cache/
 .temp/
 tmp/
-node_modules**
-tests
-src/certs**
-.venv**
-core.*
