@@ -263,3 +263,4 @@ tests
 src/certs**
 .venv**
 core.*
+pnpm-workspace.yaml
