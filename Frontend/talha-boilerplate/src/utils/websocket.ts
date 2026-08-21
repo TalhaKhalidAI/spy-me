@@ -192,6 +192,7 @@ export class WebSocketClient {
 
     this.socket = io(this.config.url, {
       ...this.config.options,
+      forceNew: true, // Guarantees a fresh socket ID and prevents internal manager caching loops
       reconnectionAttempts: this.config.reconnectionAttempts,
       reconnectionDelay: this.config.reconnectionDelay,
       reconnectionDelayMax: this.config.reconnectionDelayMax,

@@ -79,7 +79,7 @@ const VideoModal = ({
                     if (el && el.srcObject !== localStream) {
                       el.srcObject = localStream;
                       el.muted = true;
-                      el.play().catch(() => {});
+                      el.play().catch(() => { });
                     }
                   }}
                   autoPlay
@@ -113,7 +113,7 @@ const VideoModal = ({
                   ref={(el) => {
                     if (el && el.srcObject !== stream) {
                       el.srcObject = stream;
-                      el.play().catch(() => {});
+                      el.play().catch(() => { });
                     }
                   }}
                   autoPlay
@@ -175,7 +175,7 @@ const SfuTest = (): JSX.Element => {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
   const [activeDetailTab, setActiveDetailTab] = useState<'producers' | 'consumers'>('producers');
-  
+
   // ─── Device & Media State ──────────────────────────────────
   const [device, setDevice] = useState<Device | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -661,13 +661,13 @@ const SfuTest = (): JSX.Element => {
       if (sendTransport) {
         try {
           sendTransport.close();
-        } catch (e) {}
+        } catch (e) { }
         setSendTransport(null);
       }
       if (recvTransport) {
         try {
           recvTransport.close();
-        } catch (e) {}
+        } catch (e) { }
         setRecvTransport(null);
       }
 
@@ -970,28 +970,49 @@ const SfuTest = (): JSX.Element => {
     ]
   );
 
-const MakeCall = useCallback(async (roomId: string) => {
+  const MakeCall = useCallback(async (roomId: string) => {
     // ─── Check WebSocket connection FIRST ──────────────
     if (!wsClientRef.current || !wsConnected) {
-        ToastMsgs.error('❌ WebSocket not connected. Please connect first.');
-        console.warn('⚠️ WebSocket not connected');
-        return;
+      ToastMsgs.error('❌ WebSocket not connected. Please connect first.');
+      console.warn('⚠️ WebSocket not connected');
+      return;
     }
 
-    // If already in a call, leave first
-    if (isCallActive) {
-        await leaveCall();
-        await new Promise(resolve => setTimeout(resolve, 500));
+    if (isCallActive && selectedRoomId === roomId) {
+      setIsVideoModalOpen(true);
+      return;
     }
+
+    // If already in a call with a different room, leave first
+    if (isCallActive) {
+      await leaveCall();
+      if (wsClientRef.current) {
+        wsClientRef.current.disconnect();
+        wsClientRef.current.connect();
+        try {
+          await wsClientRef.current.waitForConnection(5000);
+        } catch (e) {
+          ToastMsgs.error('Failed to reconnect WebSocket cleanly');
+          return;
+        }
+      }
+    }
+
     setSelectedRoomId(roomId);
     await establishDevice(roomId);
-}, [establishDevice, isCallActive, leaveCall, wsConnected]);
+  }, [establishDevice, isCallActive, leaveCall, wsConnected, selectedRoomId]);
 
   // ─── End Call ──────────────────────────────────────────────
   const endCall = useCallback(async () => {
     await leaveCall();
     setSelectedRows([]);
     setIsVideoModalOpen(false);
+
+    // Refresh WebSocket to completely clear server-side state (prevents transport limit errors)
+    if (wsClientRef.current) {
+      wsClientRef.current.disconnect();
+      wsClientRef.current.connect();
+    }
   }, [leaveCall]);
 
   // ─── Room Queries & Mutations ─────────────────────────────
@@ -1148,6 +1169,20 @@ const MakeCall = useCallback(async (roomId: string) => {
     setSelectedRows([]);
     setTimeout(() => refetch(), 500);
   };
+
+  // ─── Handle Remote Refresh ───────────────────────────────
+  const handleRemoteRefresh = useCallback(async (socketId: string) => {
+    if (!window.confirm(`Force refresh peer on socket "${socketId}"?`)) return;
+    if (wsClientRef.current) {
+      try {
+        await wsClientRef.current.emitPromise('remoteCommand', { socketId, command: 'refresh' });
+        ToastMsgs.success(`Sent remote refresh to ${socketId}`);
+      } catch (err: any) {
+        console.warn('Remote command failed or not supported:', err);
+        ToastMsgs.error(`Failed to refresh (requires backend support)`);
+      }
+    }
+  }, []);
 
   // ─── Handle Force Close ──────────────────────────────────
   const handleForceCloseProducer = (producerId: string) => {
@@ -1560,7 +1595,12 @@ const MakeCall = useCallback(async (roomId: string) => {
                             <td>{producer.source}</td>
                             <td className="font-mono text-xs">{producer.socketId.slice(0, 6)}...</td>
                             <td><span className={`badge ${producer.paused ? 'badge-warning' : 'badge-success'} badge-xs`}>{producer.paused ? '⏸️ Paused' : '▶️ Active'}</span></td>
-                            <td><button className="btn btn-ghost btn-xs text-error" onClick={() => handleForceCloseProducer(producer.id)} title="Force Close Producer">✕</button></td>
+                            <td>
+                              <div className="flex gap-1">
+                                <button className="btn btn-ghost btn-xs text-error" onClick={() => handleForceCloseProducer(producer.id)} title="Drop Call">📞✕</button>
+                                <button className="btn btn-ghost btn-xs text-warning" onClick={() => handleRemoteRefresh(producer.socketId)} title="Remote Refresh">🔄</button>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
