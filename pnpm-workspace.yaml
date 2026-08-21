@@ -1,0 +1,6 @@
+allowBuilds:
+  '@prisma/engines': false
+  '@scarf/scarf': false
+  argon2: false
+  mediasoup: false
+  prisma: false

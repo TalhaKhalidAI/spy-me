@@ -16,11 +16,158 @@ import {
   useStopSFU,
   useRestartSFU
 } from './query';
+import { sfuApi } from './sfu.api';
 import { createRoomSchema, CreateRoomInput } from './schema';
 import { WebSocketClient } from '@/utils/websocket';
 import { Device } from 'mediasoup-client';
 import { ToastMsgs } from '@/api/toastUtils';
 
+// ─── Video Modal Component ──────────────────────────────────
+interface VideoModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  roomId: string;
+  remoteStreams: Map<string, MediaStream>;
+  localStream: MediaStream | null;
+  isCallActive: boolean;
+  onEndCall: () => void;
+}
+
+const VideoModal = ({
+  isOpen,
+  onClose,
+  roomId,
+  remoteStreams,
+  localStream,
+  isCallActive,
+  onEndCall
+}: VideoModalProps) => {
+  if (!isOpen) return null;
+
+  const remoteCount = remoteStreams.size;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      <div className="bg-base-100 rounded-2xl w-[95vw] max-w-6xl max-h-[90vh] overflow-hidden shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-base-200">
+          <div>
+            <h2 className="text-xl font-bold">📹 Video Conference</h2>
+            <p className="text-sm text-base-content/60">Room: {roomId}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`badge ${isCallActive ? 'badge-success' : 'badge-error'}`}>
+              {isCallActive ? '🟢 Live' : '🔴 Disconnected'}
+            </span>
+            <button
+              className="btn btn-ghost btn-sm btn-square"
+              onClick={onClose}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Video Grid */}
+        <div className="p-4 bg-black/5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-h-[400px]">
+            {/* Local Video */}
+            <div className="bg-black rounded-xl overflow-hidden aspect-video relative border-2 border-blue-500">
+              {localStream ? (
+                <video
+                  ref={(el) => {
+                    if (el && el.srcObject !== localStream) {
+                      el.srcObject = localStream;
+                      el.muted = true;
+                      el.play().catch(() => {});
+                    }
+                  }}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-white/50">
+                  <div className="text-center">
+                    <span className="text-4xl block">📷</span>
+                    <span className="text-sm">No camera</span>
+                  </div>
+                </div>
+              )}
+              <div className="absolute bottom-2 left-2 text-white/80 text-xs bg-black/60 px-2 py-1 rounded">
+                📷 You
+              </div>
+              <div className="absolute top-2 right-2">
+                <span className="badge badge-success badge-sm">Live</span>
+              </div>
+            </div>
+
+            {/* Remote Videos */}
+            {Array.from(remoteStreams.entries()).map(([id, stream]) => (
+              <div
+                key={id}
+                className="bg-black rounded-xl overflow-hidden aspect-video relative border-2 border-green-500"
+              >
+                <video
+                  ref={(el) => {
+                    if (el && el.srcObject !== stream) {
+                      el.srcObject = stream;
+                      el.play().catch(() => {});
+                    }
+                  }}
+                  autoPlay
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-2 left-2 text-white/80 text-xs bg-black/60 px-2 py-1 rounded">
+                  👤 {id.slice(0, 8)}...
+                </div>
+                <div className="absolute top-2 right-2">
+                  <span className="badge badge-success badge-sm">Live</span>
+                </div>
+              </div>
+            ))}
+
+            {/* Empty state */}
+            {remoteCount === 0 && isCallActive && (
+              <div className="bg-black/50 rounded-xl aspect-video flex items-center justify-center border-2 border-dashed border-white/20">
+                <div className="text-center text-white/50">
+                  <span className="text-4xl block mb-2">👥</span>
+                  <span className="text-sm">Waiting for others to join...</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="flex items-center justify-center gap-4 p-4 border-t border-base-200 bg-base-100">
+          <button
+            className="btn btn-error btn-sm"
+            onClick={() => {
+              onEndCall();
+              onClose();
+            }}
+          >
+            📞 End Call
+          </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+          >
+            Close
+          </button>
+          <span className="text-xs text-base-content/40">
+            {remoteCount} peer(s) connected
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Main Component ──────────────────────────────────────────
 const SfuTest = (): JSX.Element => {
   // ─── State ──────────────────────────────────────────────────
   const [selectedRows, setSelectedRows] = useState<any[]>([]);
@@ -39,6 +186,7 @@ const SfuTest = (): JSX.Element => {
   const [consumers, setConsumers] = useState<any[]>([]);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isCallActive, setIsCallActive] = useState(false);
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
 
   // ─── WebSocket State ───────────────────────────────────────
   const [wsConnected, setWsConnected] = useState(false);
@@ -395,21 +543,108 @@ const SfuTest = (): JSX.Element => {
     }
   }, [wsConnected]);
 
-  // ─── Load Device ───────────────────────────────────────────
-  const loadDevice = useCallback(async () => {
-    const caps = await getRtpCap();
-    if (!caps) return null;
-    const dev = new Device();
-    console.log("device:::", dev);
-    await dev.load({ routerRtpCapabilities: caps });
-    setDevice(dev);
-    console.log('✅ Device loaded');
-    return dev;
-  }, [getRtpCap]);
+  const unsubListenersRef = useRef<Array<() => void>>([]);
+
+  // ─── Consume A Single Producer ──────────────────────────
+  const consumeProducer = useCallback(
+    async (
+      recvTransportObj: any,
+      dev: Device,
+      producerId: string,
+      peerSocketId: string,
+      kind?: string
+    ) => {
+      if (!recvTransportObj || !dev) {
+        console.warn('⚠️ Receive transport or device not initialized');
+        return;
+      }
+
+      if (peerSocketId === wsClientRef.current?.id) {
+        console.log('⏭️ Skipping own producer:', producerId);
+        return;
+      }
+
+      try {
+        console.log(
+          `📥 Requesting consume for producer ${producerId} (${kind || 'media'}) from ${peerSocketId}...`
+        );
+
+        const consumerData = await Consumers(
+          recvTransportObj.id,
+          producerId,
+          dev.rtpCapabilities
+        );
+
+        if (!consumerData) {
+          console.warn('⚠️ No consumer data returned for producer:', producerId);
+          return;
+        }
+
+        const consumerId = consumerData.consumerId || consumerData.id;
+        const rtpParameters = consumerData.rtpParameters;
+        const consumerKind = consumerData.kind || kind || 'video';
+
+        const consumer = await recvTransportObj.consume({
+          id: consumerId,
+          producerId: producerId,
+          rtpParameters: rtpParameters,
+          kind: consumerKind,
+        });
+
+        // 1. Resume client-side mediasoup consumer
+        await consumer.resume();
+
+        // 2. Resume server-side mediasoup consumer
+        await ResumeConsumer(consumer.id);
+
+        // 3. Attach track to remoteStreams (combine audio + video per peer socketId)
+        if (consumer.track) {
+          setRemoteStreams((prev) => {
+            const newMap = new Map(prev);
+            let stream = newMap.get(peerSocketId);
+            if (!stream) {
+              stream = new MediaStream();
+            }
+            // Remove existing track of same kind if replacing
+            stream
+              .getTracks()
+              .filter((t) => t.kind === consumer.track.kind)
+              .forEach((t) => stream!.removeTrack(t));
+
+            stream.addTrack(consumer.track);
+            newMap.set(peerSocketId, stream);
+            return newMap;
+          });
+          console.log(`🎥 Remote ${consumer.track.kind} track added for ${peerSocketId}`);
+        }
+
+        setConsumers((prev) => [
+          ...prev.filter((c) => c.id !== consumer.id),
+          {
+            id: consumer.id,
+            producerId: producerId,
+            consumer,
+            socketId: peerSocketId,
+            kind: consumerKind,
+          },
+        ]);
+
+        ToastMsgs.success(`📥 Connected to ${consumerKind} from ${peerSocketId.slice(0, 6)}...`);
+      } catch (err: any) {
+        console.error('❌ Failed to consume producer:', err);
+        ToastMsgs.error(`❌ Failed to consume: ${err.message}`);
+      }
+    },
+    [Consumers, ResumeConsumer]
+  );
 
   // ─── Leave Call ────────────────────────────────────────────
   const leaveCall = useCallback(async () => {
     try {
+      // Unsubscribe all socket event listeners
+      unsubListenersRef.current.forEach((unsub) => unsub());
+      unsubListenersRef.current = [];
+
       // Close all producers
       for (const p of producers) {
         await CloseProducer(p.id);
@@ -424,119 +659,339 @@ const SfuTest = (): JSX.Element => {
 
       // Close transports
       if (sendTransport) {
-        try { sendTransport.close(); } catch (e) {}
+        try {
+          sendTransport.close();
+        } catch (e) {}
         setSendTransport(null);
       }
       if (recvTransport) {
-        try { recvTransport.close(); } catch (e) {}
+        try {
+          recvTransport.close();
+        } catch (e) {}
         setRecvTransport(null);
       }
 
       // Stop local stream
       if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
+        localStream.getTracks().forEach((t) => t.stop());
         setLocalStream(null);
       }
 
       // Clear remote streams
       remoteStreams.forEach((stream) => {
-        stream.getTracks().forEach(t => t.stop());
+        stream.getTracks().forEach((t) => t.stop());
       });
       setRemoteStreams(new Map());
 
       setDevice(null);
       setIsCallActive(false);
-      
+      setIsVideoModalOpen(false);
+
       ToastMsgs.success('📞 Call ended');
       console.log('✅ Call ended');
     } catch (error) {
       console.error('❌ Error leaving call:', error);
     }
-  }, [producers, consumers, sendTransport, recvTransport, localStream, remoteStreams, CloseProducer, CloseConsumer]);
+  }, [
+    producers,
+    consumers,
+    sendTransport,
+    recvTransport,
+    localStream,
+    remoteStreams,
+    CloseProducer,
+    CloseConsumer,
+  ]);
 
-
-  
-      // ─── Establish Device ──────────────────────────────────
-  const establishDevice = useCallback(async () => {
-      try {
-          // ─── 1️⃣ Get RTP Capabilities ──────────────────────
-          const rcap = await getRtpCap();
-          if (!rcap) {
-              ToastMsgs.error('❌ Failed to get RTP capabilities');
-              return;
-          }
-  
-          // ─── 2️⃣ Create & Load Device ──────────────────────
-          const dev = new Device();
-          await dev.load({ routerRtpCapabilities: rcap });
-          setDevice(dev);
-          ToastMsgs.success('✅ Device loaded successfully');
-  
-          // ─── 3️⃣ Create Transports ──────────────────────────
-          const roomId = 'default-room';
-          
-          // ✅ Create SEND transport
-          const transportData = await wsClientRef?.current.createSendTransport(roomId);
-          const sendTransport = dev.createSendTransport({
-              id: transportData.id,
-              iceParameters: transportData.iceParameters,
-              iceCandidates: transportData.iceCandidates,
-              dtlsParameters: transportData.dtlsParameters,
-              sctpParameters: transportData.sctpParameters,
-          });
-  
-          // ✅ Create RECV transport
-          const recvTransportData = await wsClientRef?.current.createRecvTransport(roomId);
-          const recvTransport = dev.createRecvTransport({
-              id: recvTransportData.id,  // ✅ Now it exists
-              iceParameters: recvTransportData.iceParameters,
-              iceCandidates: recvTransportData.iceCandidates,
-              dtlsParameters: recvTransportData.dtlsParameters,
-              sctpParameters: recvTransportData.sctpParameters,
-          });
-          
-          // ─── 4️⃣ Connect SEND Transport ──────────────────────
-          sendTransport.on('connect', ({ dtlsParameters }, callback) => {
-              ConnectTransport(sendTransport.id, dtlsParameters)
-                  .then(() => {
-                      callback();
-                      ToastMsgs.success('🔐 Send transport connected!');
-                  })
-                  .catch((err) => {
-                      callback(new Error('DTLS failed'));
-                      ToastMsgs.error(`❌ Send DTLS failed: ${err}`);
-                  });
-          });
-          
-          // ─── 5️⃣ Connect RECV Transport ──────────────────────
-          recvTransport.on('connect', ({ dtlsParameters }, callback) => {
-              ConnectTransport(recvTransport.id, dtlsParameters)
-                  .then(() => {
-                      callback();
-                      ToastMsgs.success('🔐 Recv transport connected!');
-                  })
-                  .catch((err) => {
-                      callback(new Error('DTLS failed'));
-                      ToastMsgs.error(`❌ Recv DTLS failed: ${err}`);
-                  });
-          });
-          
-          ToastMsgs.success('✅ Transports created, connecting...');
-  
-      } catch (err) {
-          ToastMsgs.error(`❌ Error: ${err}`);
-          console.error('Error:', err);
+  const joinRoom = useCallback(
+    async (roomId: string) => {
+      if (!wsClientRef.current || !wsConnected) {
+        console.warn('⚠️ WebSocket not connected');
+        return;
       }
-  }, [device, getRtpCap, wsClientRef.current, ConnectTransport]);
+      try {
+        console.log(`🏠 Joining room: ${roomId}`);
+        await wsClientRef.current.emitPromise('joinRoom', { roomId });
+        ToastMsgs.success(`✅ Joined room: ${roomId}`);
+      } catch (error: any) {
+        console.error('❌ Failed to join room:', error);
+        ToastMsgs.error(`❌ Failed to join room: ${error.message}`);
+        throw error;
+      }
+    },
+    [wsConnected]
+  );
 
-  // ─── COMPLETE MakeCall Function ────────────────────────────
-  const MakeCall=useCallback(async()=>{
-    await establishDevice()
-  },[])
+  // ─── Establish Device & Join Room ──────────────────────────
+  const establishDevice = useCallback(
+    async (targetRoomId?: string) => {
+      try {
+        // ─── 0️⃣ CHECK WebSocket Connection ──────────────
+        if (!wsClientRef.current) {
+          ToastMsgs.error('❌ WebSocket client not initialized');
+          return;
+        }
+
+        if (!wsConnected) {
+          ToastMsgs.error('❌ WebSocket not connected');
+          return;
+        }
+
+        const activeRoomId = targetRoomId || selectedRoomId || 'talha-room';
+
+        // ─── 1️⃣ Get RTP Capabilities ──────────────────────
+        const rcap = await getRtpCap();
+        if (!rcap) {
+          ToastMsgs.error('❌ Failed to get RTP capabilities');
+          return;
+        }
+
+        // ─── 2️⃣ Create & Load Device ──────────────────────
+        const dev = new Device();
+        await dev.load({ routerRtpCapabilities: rcap });
+        setDevice(dev);
+        ToastMsgs.success('✅ Device loaded successfully');
+
+        // ─── 3️⃣ Join Room ──────────────────────────────────
+        await joinRoom(activeRoomId);
+
+        // ─── 4️⃣ Create Transports ──────────────────────────
+        // SEND transport
+        const transportData = await wsClientRef.current.createSendTransport(activeRoomId);
+        if (!transportData) {
+          ToastMsgs.error('❌ Failed to create send transport');
+          return;
+        }
+
+        const sendTransportObj = dev.createSendTransport({
+          id: transportData.id,
+          iceParameters: transportData.iceParameters,
+          iceCandidates: transportData.iceCandidates,
+          dtlsParameters: transportData.dtlsParameters,
+          sctpParameters: transportData.sctpParameters,
+        });
+
+        // RECV transport
+        const recvTransportData = await wsClientRef.current.createRecvTransport(activeRoomId);
+        if (!recvTransportData) {
+          ToastMsgs.error('❌ Failed to create receive transport');
+          return;
+        }
+
+        const recvTransportObj = dev.createRecvTransport({
+          id: recvTransportData.id,
+          iceParameters: recvTransportData.iceParameters,
+          iceCandidates: recvTransportData.iceCandidates,
+          dtlsParameters: recvTransportData.dtlsParameters,
+          sctpParameters: recvTransportData.sctpParameters,
+        });
+
+        // ─── 5️⃣ Connect SEND Transport ──────────────────────
+        sendTransportObj.on('connect', ({ dtlsParameters }, callback, errback) => {
+          ConnectTransport(sendTransportObj.id, dtlsParameters)
+            .then(() => {
+              callback();
+              ToastMsgs.success('🔐 Send transport connected!');
+            })
+            .catch((err) => {
+              errback(err);
+              ToastMsgs.error(`❌ Send DTLS failed: ${err.message}`);
+            });
+        });
+
+        // ─── 6️⃣ Connect RECV Transport ──────────────────────
+        recvTransportObj.on('connect', ({ dtlsParameters }, callback, errback) => {
+          ConnectTransport(recvTransportObj.id, dtlsParameters)
+            .then(() => {
+              callback();
+              ToastMsgs.success('🔐 Recv transport connected!');
+            })
+            .catch((err) => {
+              errback(err);
+              ToastMsgs.error(`❌ Recv DTLS failed: ${err.message}`);
+            });
+        });
+
+        // ─── 7️⃣ Setup Produce Handler ──────────────────────
+        sendTransportObj.on('produce', async ({ kind, rtpParameters }, callback, errback) => {
+          try {
+            const result = await Producers(
+              sendTransportObj.id,
+              kind,
+              rtpParameters,
+              'camera'
+            );
+            if (result?.producerId) {
+              callback({ id: result.producerId });
+            } else {
+              errback(new Error('Failed to create producer'));
+            }
+          } catch (error: any) {
+            console.error('❌ Produce handler error:', error);
+            errback(error);
+          }
+        });
+
+        ToastMsgs.success('✅ Transports created, connecting...');
+
+        // ─── 8️⃣ Get Media ──────────────────────────────────
+        const media = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user',
+          },
+        });
+
+        const videoTrack = media.getVideoTracks()[0];
+        const audioTrack = media.getAudioTracks()[0];
+
+        if (!media || (!audioTrack && !videoTrack)) {
+          ToastMsgs.error('❌ No media devices available');
+          return;
+        }
+
+        // ─── 9️⃣ Set Local Stream ──────────────────────────
+        setLocalStream(media);
+        ToastMsgs.success('📸 Media captured successfully');
+
+        // ─── 🔟 Produce Audio & Video ──────────────────────
+        const createdProducers: any[] = [];
+
+        if (audioTrack) {
+          const audioProducer = await sendTransportObj.produce({
+            track: audioTrack,
+            encodings: [{ maxBitrate: 64000 }],
+            codecOptions: {
+              opusStereo: true,
+              opusFec: true,
+              opusDtx: true,
+            },
+          });
+
+          console.log(`🎤 Audio producer: ${audioProducer.id}`);
+          createdProducers.push({
+            id: audioProducer.id,
+            kind: 'audio',
+            producer: audioProducer,
+            track: audioTrack,
+          });
+        }
+
+        if (videoTrack) {
+          const videoProducer = await sendTransportObj.produce({
+            track: videoTrack,
+            encodings: [
+              { maxBitrate: 100000 },
+              { maxBitrate: 300000 },
+              { maxBitrate: 900000 },
+            ],
+          });
+
+          console.log(`📹 Video producer: ${videoProducer.id}`);
+          createdProducers.push({
+            id: videoProducer.id,
+            kind: 'video',
+            producer: videoProducer,
+            track: videoTrack,
+          });
+        }
+
+        setProducers(createdProducers);
+        setSendTransport(sendTransportObj);
+        setRecvTransport(recvTransportObj);
+
+        // ─── 1️⃣1️⃣ Consume Existing Producers In Room ────────
+        try {
+          console.log(`🔍 Fetching existing producers for room: ${activeRoomId}...`);
+          const roomProducersData = await sfuApi.getRoomProducers(activeRoomId);
+          if (roomProducersData?.producers && Array.isArray(roomProducersData.producers)) {
+            console.log(`📋 Found ${roomProducersData.producers.length} existing producer(s) in room`);
+            for (const p of roomProducersData.producers) {
+              if (p.socketId !== wsClientRef.current?.id && p.id) {
+                await consumeProducer(recvTransportObj, dev, p.id, p.socketId, p.kind);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('⚠️ Could not fetch existing room producers:', err);
+        }
+
+        // ─── 1️⃣2️⃣ Setup Socket Listeners ────────────────────
+        unsubListenersRef.current.forEach((unsub) => unsub());
+        unsubListenersRef.current = [];
+
+        const unsubNewProducer = wsClientRef.current.on('newProducer', async (data: any) => {
+          console.log('📢 Received newProducer event:', data);
+          await consumeProducer(recvTransportObj, dev, data.producerId, data.socketId, data.kind);
+        });
+
+        const unsubProducerClosed = wsClientRef.current.on('producerClosed', (data: any) => {
+          console.log('🗑️ Received producerClosed event:', data);
+          setConsumers((prev) => prev.filter((c) => c.producerId !== data.producerId));
+        });
+
+        const unsubClientLeft = wsClientRef.current.on('clientLeft', (data: any) => {
+          console.log('👋 Received clientLeft event:', data);
+          setRemoteStreams((prev) => {
+            const newMap = new Map(prev);
+            const stream = newMap.get(data.socketId);
+            if (stream) {
+              stream.getTracks().forEach((t) => t.stop());
+              newMap.delete(data.socketId);
+            }
+            return newMap;
+          });
+          setConsumers((prev) => prev.filter((c) => c.socketId !== data.socketId));
+        });
+
+        unsubListenersRef.current = [unsubNewProducer, unsubProducerClosed, unsubClientLeft];
+
+        // ─── 1️⃣3️⃣ Mark Call as Active & Open Modal ────────
+        setIsCallActive(true);
+        setIsVideoModalOpen(true);
+        ToastMsgs.success(`📞 Connected to room: ${activeRoomId}`);
+      } catch (err: any) {
+        ToastMsgs.error(`❌ Error: ${err.message}`);
+        console.error('Error in establishDevice:', err);
+        await leaveCall();
+      }
+    },
+    [
+      selectedRoomId,
+      wsConnected,
+      getRtpCap,
+      joinRoom,
+      ConnectTransport,
+      Producers,
+      consumeProducer,
+      leaveCall,
+    ]
+  );
+
+const MakeCall = useCallback(async (roomId: string) => {
+    // ─── Check WebSocket connection FIRST ──────────────
+    if (!wsClientRef.current || !wsConnected) {
+        ToastMsgs.error('❌ WebSocket not connected. Please connect first.');
+        console.warn('⚠️ WebSocket not connected');
+        return;
+    }
+
+    // If already in a call, leave first
+    if (isCallActive) {
+        await leaveCall();
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    setSelectedRoomId(roomId);
+    await establishDevice(roomId);
+}, [establishDevice, isCallActive, leaveCall, wsConnected]);
+
   // ─── End Call ──────────────────────────────────────────────
   const endCall = useCallback(async () => {
     await leaveCall();
     setSelectedRows([]);
+    setIsVideoModalOpen(false);
   }, [leaveCall]);
 
   // ─── Room Queries & Mutations ─────────────────────────────
@@ -996,50 +1451,16 @@ const SfuTest = (): JSX.Element => {
         </div>
       )}
 
-      {/* ─── Video Grid ───────────────────────────────────────── */}
-      {isCallActive && (
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          {/* Local Video */}
-          <div className="bg-black rounded-lg overflow-hidden aspect-video relative">
-            <video
-              ref={(el) => {
-                if (el && localStream) {
-                  el.srcObject = localStream;
-                  el.muted = true;
-                  el.play();
-                }
-              }}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute bottom-2 left-2 text-white/70 text-xs bg-black/50 px-2 py-1 rounded">
-              📷 You
-            </div>
-          </div>
-
-          {/* Remote Videos */}
-          {Array.from(remoteStreams.entries()).map(([id, stream]) => (
-            <div key={id} className="bg-black rounded-lg overflow-hidden aspect-video relative">
-              <video
-                ref={(el) => {
-                  if (el) {
-                    el.srcObject = stream;
-                    el.play();
-                  }
-                }}
-                autoPlay
-                playsInline
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute bottom-2 left-2 text-white/70 text-xs bg-black/50 px-2 py-1 rounded">
-                👤 Peer
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* ─── Video Modal ─────────────────────────────────────── */}
+      <VideoModal
+        isOpen={isVideoModalOpen}
+        onClose={() => setIsVideoModalOpen(false)}
+        roomId={selectedRoomId}
+        remoteStreams={remoteStreams}
+        localStream={localStream}
+        isCallActive={isCallActive}
+        onEndCall={endCall}
+      />
 
       {/* ─── Create Room Modal ──────────────────────────────── */}
       <dialog className={`modal ${isModalOpen ? 'modal-open' : ''}`}>
