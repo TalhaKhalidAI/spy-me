@@ -1185,8 +1185,8 @@ const SfuTest = (): JSX.Element => {
   }, []);
 
   // ─── Handle Force Close ──────────────────────────────────
-  const handleForceCloseProducer = (producerId: string) => {
-    if (!window.confirm(`Force close producer "${producerId}"?`)) return;
+  const handleForceCloseProducer = (producerId: string, skipConfirm: boolean = false) => {
+    if (!skipConfirm && !window.confirm(`Force close producer "${producerId}"?`)) return;
     forceCloseProducer.mutate(producerId, {
       onSuccess: () => {
         console.log('✅ Producer closed:', producerId);
@@ -1199,6 +1199,26 @@ const SfuTest = (): JSX.Element => {
       },
     });
   };
+
+  const handleDropRoomCall = async (roomId: string) => {
+    if (!window.confirm(`Drop call for room ${roomId}?`)) return;
+    try {
+      const response = await sfuApi.getRoomProducers(roomId);
+      const producersList = Array.isArray(response) 
+        ? response 
+        : (response as any).producers || (response as any).data || [];
+        
+      if (!producersList || producersList.length === 0) {
+        alert('No active call in this room.');
+        return;
+      }
+      producersList.forEach((p: any) => handleForceCloseProducer(p.id, true));
+      ToastMsgs.success(`Dropping call for room ${roomId}...`);
+    } catch (err: any) {
+      alert(`Error dropping call: ${err.message}`);
+    }
+  };
+
 
   const handleForceCloseConsumer = (consumerId: string) => {
     if (!window.confirm(`Force close consumer "${consumerId}"?`)) return;
@@ -1417,12 +1437,6 @@ const SfuTest = (): JSX.Element => {
       </div>
 
       {/* ─── Call Status ──────────────────────────────────────── */}
-      {isCallActive && (
-        <div className="alert alert-success shadow-lg mb-4">
-          <span>📞 Call active in room: {selectedRoomId}</span>
-          <button className="btn btn-error btn-sm" onClick={endCall}>⏹️ End Call</button>
-        </div>
-      )}
 
       {/* ─── Selected Rows Info ────────────────────────────── */}
       {selectedRows.length > 0 && (
@@ -1467,6 +1481,24 @@ const SfuTest = (): JSX.Element => {
                 console.log('🎥 Video Live clicked for room:', row?.room_id);
                 await MakeCall(row?.room_id);
               },
+            },
+            {
+              render: (row) => {
+                const isActive = row?.active === 'Active' || row?.active === true;
+                if (!isActive) return null;
+                return (
+                  <button
+                    className="btn btn-ghost btn-xs text-warning hover:bg-warning/20 hover:text-warning"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDropRoomCall(row?.room_id);
+                    }}
+                    title="Drop Call"
+                  >
+                    📞✕
+                  </button>
+                );
+              }
             },
             {
               icon: '🗑️',

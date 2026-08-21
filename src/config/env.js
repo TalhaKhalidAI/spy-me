@@ -10,7 +10,8 @@ dotenv.config({ path: path.join(process.cwd(), '.env') });
 const envSchema = z.object({
   // Environment
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-
+ RATE_LIMIT_MAX: z.coerce.number().min(1).max(10000).default(100),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().min(1000).max(3600000).default(900000),
   // Logger Configuration
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('info'),
   ENABLE_AUDIT_LOG: z.coerce.boolean().default(false),
@@ -62,6 +63,8 @@ const envSchema = z.object({
 const parseEnv = () => {
   try {
     const env = envSchema.parse({
+      RATE_LIMIT_MAX:process.env.RATE_LIMIT_MAX,
+      RATE_LIMIT_WINDOW_MS:process.env.RATE_LIMIT_WINDOW_MS,
       LOG_LEVEL: process.env.LOG_LEVEL,
       RTC_MIN_PORT: process.env.RTC_MIN_PORT || process.env.LOG_MIN_PORT,
       RTC_MAX_PORT: process.env.RTC_MAX_PORT || process.env.LOG_MAX_PORT,

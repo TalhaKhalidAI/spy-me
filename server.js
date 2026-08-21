@@ -110,8 +110,8 @@ app.use((req, res, next) => {
 
 // ─── Rate Limiting ───────────────────────────────────────────────────────────
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+    windowMs:env.RATE_LIMIT_WINDOW_MS || 900000,
+    max: env.RATE_LIMIT_MAX||100,
     standardHeaders: true,
     legacyHeaders: false,
     message: { status: 'fail', message: 'Too many requests, please try again after 15 minutes.' },

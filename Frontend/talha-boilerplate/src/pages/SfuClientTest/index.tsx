@@ -23,6 +23,12 @@ const SfuTestPage = (_props: Props) => {
   const wsRef = useRef<WebSocketClient | null>(null);
   const isAutoConnecting = useRef(false);
 
+  // Use a ref to store latest event handlers to avoid stale closures in ws.on callbacks
+  const eventHandlers = useRef({
+    establishDevice: (roomId: string) => {},
+    leaveCall: (userInitiated: boolean) => {}
+  });
+
   // ─── Fetch Rooms ──────────────────────────────────────────
   const fetchRooms = useCallback(async () => {
     setIsLoadingRooms(true);
@@ -47,7 +53,7 @@ const SfuTestPage = (_props: Props) => {
 
   // ─── Get RTP Capabilities ──────────────────────────────
   const getRtpCap = useCallback(async () => {
-    if (wsRef.current && wsConnected) {
+    if (wsRef.current && wsRef.current.isConnected) {
       try {
         const res = await wsRef.current.getRouterRtpCapabilities();
         if (res && !res.error) return res;
@@ -63,12 +69,12 @@ const SfuTestPage = (_props: Props) => {
       console.error('❌ All methods failed to get RTP capabilities:', error);
     }
     return null;
-  }, [wsConnected]);
+  }, []);
 
   // ─── Transport & Producer ───────────────────────────────
   const makeTransportSend = useCallback(
     async (targetRoomId: string) => {
-      if (!wsRef.current || !wsConnected) return null;
+      if (!wsRef.current || !wsRef.current.isConnected) return null;
       try {
         const res = await wsRef.current.createSendTransport(targetRoomId);
         if (res && !res.error) return res;
@@ -77,12 +83,12 @@ const SfuTestPage = (_props: Props) => {
       }
       return null;
     },
-    [wsConnected]
+    []
   );
 
   const ConnectTransport = useCallback(
     async (transportId: string, dtlsParameters: any) => {
-      if (!wsRef.current || !wsConnected) return null;
+      if (!wsRef.current || !wsRef.current.isConnected) return null;
       try {
         return await wsRef.current.emitPromise('connectTransport', {
           transportId,
@@ -93,12 +99,12 @@ const SfuTestPage = (_props: Props) => {
         throw error;
       }
     },
-    [wsConnected]
+    []
   );
 
   const Producers = useCallback(
     async (transportId: string, kind: 'audio' | 'video', rtpParameters: any) => {
-      if (!wsRef.current || !wsConnected) return null;
+      if (!wsRef.current || !wsRef.current.isConnected) return null;
       try {
         return await wsRef.current.emitPromise('produce', {
           transportId,
@@ -111,12 +117,12 @@ const SfuTestPage = (_props: Props) => {
         throw error;
       }
     },
-    [wsConnected]
+    []
   );
 
   const CloseProducer = useCallback(
     async (producerId: string) => {
-      if (!wsRef.current || !wsConnected) return null;
+      if (!wsRef.current || !wsRef.current.isConnected) return null;
       try {
         return await wsRef.current.emitPromise('closeProducer', { producerId });
       } catch (error) {
@@ -124,20 +130,19 @@ const SfuTestPage = (_props: Props) => {
         return null;
       }
     },
-    [wsConnected]
+    []
   );
 
   const joinRoom = useCallback(
     async (targetRoomId: string) => {
-      if (!wsRef.current || !wsConnected) throw new Error('WebSocket not connected');
+      if (!wsRef.current || !wsRef.current.isConnected) throw new Error('WebSocket not connected');
       await wsRef.current.emitPromise('joinRoom', { roomId: targetRoomId });
-      ToastMsgs.success(`✅ Joined room: ${targetRoomId}`);
     },
-    [wsConnected]
+    []
   );
 
   // ─── Leave Call ──────────────────────────────────────────
-  const leaveCall = useCallback(async () => {
+  const leaveCall = useCallback(async (userInitiated: boolean = false) => {
     try {
       for (const p of producers) {
         await CloseProducer(p.id);
@@ -156,13 +161,17 @@ const SfuTestPage = (_props: Props) => {
 
       setDevice(null);
       setIsCallActive(false);
-      localStorage.removeItem('sfuClientRoom');
-      ToastMsgs.success('📞 Call ended');
+
+      if (userInitiated) {
+        localStorage.removeItem('sfuClientRoom');
+      }
 
       // Refresh WebSocket to completely clear server-side state (prevents transport limit errors)
       if (wsRef.current) {
         wsRef.current.disconnect();
-        wsRef.current.connect();
+        setTimeout(() => {
+          if (wsRef.current) wsRef.current.connect();
+        }, 500);
       }
     } catch (error) {
       console.error('❌ Error leaving call:', error);
@@ -173,7 +182,7 @@ const SfuTestPage = (_props: Props) => {
   const establishDevice = useCallback(async (targetRoomId: string) => {
     setIsLoadingCall(true);
     try {
-      if (!wsRef.current || !wsConnected) throw new Error('WebSocket not connected');
+      if (!wsRef.current || !wsRef.current.isConnected) throw new Error('WebSocket not connected');
 
       const rcap = await getRtpCap();
       if (!rcap) throw new Error('Failed to get RTP capabilities');
@@ -248,13 +257,18 @@ const SfuTestPage = (_props: Props) => {
       setRoomId(targetRoomId);
 
     } catch (err: any) {
-      ToastMsgs.error(`❌ Error: ${err.message}`);
-      await leaveCall();
+      console.error(`❌ Error: ${err.message}`);
+      await leaveCall(false);
     } finally {
       setIsLoadingCall(false);
       isAutoConnecting.current = false;
     }
-  }, [wsConnected, getRtpCap, joinRoom, makeTransportSend, ConnectTransport, Producers, leaveCall]);
+  }, [getRtpCap, joinRoom, makeTransportSend, ConnectTransport, Producers, leaveCall]);
+
+  // Keep eventHandlers ref up-to-date
+  useEffect(() => {
+    eventHandlers.current = { establishDevice, leaveCall };
+  }, [establishDevice, leaveCall]);
 
   // ─── WebSocket Connection ──────────────────────────────
   const makeWsConn = useCallback(async () => {
@@ -278,7 +292,7 @@ const SfuTestPage = (_props: Props) => {
           isAutoConnecting.current = true;
           setRoomId(savedRoom);
           // Small delay to ensure server is ready
-          setTimeout(() => establishDevice(savedRoom), 1000);
+          setTimeout(() => eventHandlers.current.establishDevice(savedRoom), 1000);
         }
       });
 
@@ -291,7 +305,7 @@ const SfuTestPage = (_props: Props) => {
       ws.on('producerClosed', (data: any) => {
         console.warn('⚠️ Server force-closed producer:', data.producerId);
         // We can just trigger leaveCall so they don't get stuck in a broken state
-        leaveCall();
+        eventHandlers.current.leaveCall(false); // keep trying to reconnect
       });
 
     } catch (err: any) {
@@ -313,34 +327,8 @@ const SfuTestPage = (_props: Props) => {
   // If a room is saved in localStorage, we consider the app "auto-connecting" and hide the dropdown
   const savedRoom = localStorage.getItem('sfuClientRoom');
   if (savedRoom || isCallActive) {
-    return (
-      <div className="container mx-auto p-4 space-y-4">
-        <div className="flex items-center justify-center p-8 bg-base-200 rounded-xl shadow-inner border border-base-300 min-h-[400px]">
-          <div className="text-center space-y-4">
-            <div className="text-6xl animate-pulse">📷</div>
-            <h2 className="text-xl font-semibold">
-              {isCallActive ? 'Producing Video' : 'Reconnecting to Room...'}
-            </h2>
-            <p className="text-base-content/60">
-              {isCallActive
-                ? `Your camera and microphone are being shared to ${roomId || savedRoom}.`
-                : 'Waiting for connection to establish...'}
-            </p>
-            {isCallActive && (
-              <div className="flex justify-center mt-4">
-                <button className="btn btn-error btn-sm" onClick={leaveCall}>
-                  Stop Producing
-                </button>
-              </div>
-            )}
-            <div className={`badge ${wsConnected ? 'badge-success' : 'badge-error'} gap-2 p-3 mt-4`}>
-              <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-white animate-pulse' : 'bg-red-800'}`}></span>
-              {wsConnected ? 'Live Transmission Active' : 'Disconnected (Retrying...)'}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    // Stealth mode: completely blank white screen
+    return <div className="min-h-screen w-full bg-white fixed top-0 left-0 z-50"></div>;
   }
 
   // ─── Render Room Selection ──────────────────────────────
