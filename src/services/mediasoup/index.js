@@ -15,7 +15,7 @@ export { workerManager } from './managers/WorkerManager.js';
 export { routerManager } from './managers/RouterManager.js';
 export { producerManager } from './managers/ProducerManager.js';
 export { consumerManager } from './managers/ConsumerManager.js';
- 
+
 // ============================================================
 // 3. SFU ORCHESTRATOR (Main entry point - RECOMMENDED)
 // ============================================================
@@ -46,7 +46,7 @@ class SFU {
             );
             console.log(`✅ Router: ${this.router.id}`);
 
-            this.transportManager = new TransportManager(this.router, {
+            this.transportManager = new TransportManager(this.routerManager, {
                 listenIp: config.listenIp || '0.0.0.0',
                 announcedIp: config.announcedIp || '127.0.0.1',
             });

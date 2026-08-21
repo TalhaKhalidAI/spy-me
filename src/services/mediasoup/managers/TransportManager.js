@@ -16,8 +16,8 @@ export class TransportManager extends EventEmitter {
     #transportMetadata = new Map();
     /** @type {Object} */
     #config;
-    /** @type {import('mediasoup').Router} */
-    #router;
+    /** @type {import('./RouterManager.js').RouterManager} */
+    #routerManager;
     /** @type {number} */
     #maxTransportsPerRoom = parseInt(env.MAX_TRANSPORTS_PER_ROOM || '10', 10);
     /** @type {number} */
@@ -27,14 +27,14 @@ export class TransportManager extends EventEmitter {
     /** @type {number} */
     #nextTransportIndex = 0;
 
-    constructor(router, config = {}) {
+    constructor(routerManager, config = {}) {
         super();
         
-        if (!router) {
-            throw new Error('Router is required for TransportManager');
+        if (!routerManager) {
+            throw new Error('RouterManager is required for TransportManager');
         }
         
-        this.#router = router;
+        this.#routerManager = routerManager;
         this.#config = {
             listenIp: config.listenIp || env.LISTEN_IP || '0.0.0.0',
             announcedIp: config.announcedIp || env.ANNOUNCED_IP || '127.0.0.1',
@@ -127,8 +127,14 @@ export class TransportManager extends EventEmitter {
                 bitrate = 0; // Receive transports don't need outgoing bitrate
             }
 
+            // Get router for this room
+            const router = this.#routerManager.getRouter(roomId);
+            if (!router) {
+                throw new Error(`Router for room ${roomId} not found`);
+            }
+
             // Create the transport
-            const transport = await this.#router.createWebRtcTransport({
+            const transport = await router.createWebRtcTransport({
                 listenIps: [
                     {
                         ip: options.listenIp || this.#config.listenIp,
