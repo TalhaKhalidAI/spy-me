@@ -318,49 +318,71 @@ const SfuTestPage = (_props: Props) => {
 
   // Keep eventHandlers ref up-to-date
   useEffect(() => {
-    eventHandlers.current = { 
-        establishDevice, 
-        leaveCall,
-        toggleCamera: (enabled?: boolean) => {
-            const videoProducer = producers.find(p => p.producer && p.producer.kind === 'video')?.producer;
-            if (videoProducer) {
-                const targetState = enabled !== undefined ? enabled : videoProducer.paused;
-                if (targetState) videoProducer.resume(); else videoProducer.pause();
-            }
+    const handleHardware = async (kind: 'video' | 'audio', enable: boolean) => {
+      const prodObj = producers.find(p => p.producer && p.producer.kind === kind);
+      const producer = prodObj?.producer;
+      
+      if (enable) {
+        // TURN ON: Request new hardware access
+        try {
+          const constraints = kind === 'video' 
+            ? { video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } }
+            : { audio: true };
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          const newTrack = kind === 'video' ? stream.getVideoTracks()[0] : stream.getAudioTracks()[0];
+          
+          if (newTrack && producer) {
+            await producer.replaceTrack({ track: newTrack });
+            producer.resume();
+            
+            // Update localStream
             if (localStream) {
-                localStream.getVideoTracks().forEach(t => t.enabled = enabled !== undefined ? enabled : !t.enabled);
+              const oldTrack = kind === 'video' ? localStream.getVideoTracks()[0] : localStream.getAudioTracks()[0];
+              if (oldTrack) {
+                oldTrack.stop();
+                localStream.removeTrack(oldTrack);
+              }
+              localStream.addTrack(newTrack);
             }
-        },
-        toggleMic: (enabled?: boolean) => {
-            const audioProducer = producers.find(p => p.producer && p.producer.kind === 'audio')?.producer;
-            if (audioProducer) {
-                const targetState = enabled !== undefined ? enabled : audioProducer.paused;
-                if (targetState) audioProducer.resume(); else audioProducer.pause();
-            }
-            if (localStream) {
-                localStream.getAudioTracks().forEach(t => t.enabled = enabled !== undefined ? enabled : !t.enabled);
-            }
-        },
-        muteAudio: () => {
-            const audioProducer = producers.find(p => p.producer && p.producer.kind === 'audio')?.producer;
-            if (audioProducer) audioProducer.pause();
-            if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = false);
-        },
-        unmuteAudio: () => {
-            const audioProducer = producers.find(p => p.producer && p.producer.kind === 'audio')?.producer;
-            if (audioProducer) audioProducer.resume();
-            if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = true);
-        },
-        stopVideo: () => {
-            const videoProducer = producers.find(p => p.producer && p.producer.kind === 'video')?.producer;
-            if (videoProducer) videoProducer.pause();
-            if (localStream) localStream.getVideoTracks().forEach(t => t.enabled = false);
-        },
-        startVideo: () => {
-            const videoProducer = producers.find(p => p.producer && p.producer.kind === 'video')?.producer;
-            if (videoProducer) videoProducer.resume();
-            if (localStream) localStream.getVideoTracks().forEach(t => t.enabled = true);
+          }
+        } catch (err) {
+          console.error(`Failed to start ${kind} hardware:`, err);
         }
+      } else {
+        // TURN OFF: Physically kill hardware
+        if (producer) {
+          producer.pause();
+          // Optional but extremely effective: replace track with null to detach it from WebRTC
+          try { await producer.replaceTrack({ track: null }); } catch(e) {}
+        }
+        
+        if (localStream) {
+          const tracks = kind === 'video' ? localStream.getVideoTracks() : localStream.getAudioTracks();
+          tracks.forEach(t => {
+            t.stop(); // ⚡ This physically turns off the camera light / mic ⚡
+            localStream.removeTrack(t);
+          });
+        }
+      }
+    };
+
+    eventHandlers.current = {
+      establishDevice,
+      leaveCall,
+      toggleCamera: (enabled?: boolean) => {
+        const prod = producers.find(p => p.producer && p.producer.kind === 'video')?.producer;
+        const targetState = enabled !== undefined ? enabled : prod?.paused;
+        handleHardware('video', !!targetState);
+      },
+      toggleMic: (enabled?: boolean) => {
+        const prod = producers.find(p => p.producer && p.producer.kind === 'audio')?.producer;
+        const targetState = enabled !== undefined ? enabled : prod?.paused;
+        handleHardware('audio', !!targetState);
+      },
+      muteAudio: () => handleHardware('audio', false),
+      unmuteAudio: () => handleHardware('audio', true),
+      stopVideo: () => handleHardware('video', false),
+      startVideo: () => handleHardware('video', true)
     };
   }, [establishDevice, leaveCall, localStream, producers]);
 
