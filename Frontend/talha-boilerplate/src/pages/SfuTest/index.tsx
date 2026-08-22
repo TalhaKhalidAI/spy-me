@@ -28,9 +28,10 @@ interface VideoModalProps {
   onClose: () => void;
   roomId: string;
   remoteStreams: Map<string, MediaStream>;
-  localStream: MediaStream | null;
   isCallActive: boolean;
   onEndCall: () => void;
+  onReconnect?: () => void;
+  onRemoteAction?: (event: string, targetSocketId?: string, payload?: any) => void;
 }
 
 const VideoModal = ({
@@ -38,9 +39,10 @@ const VideoModal = ({
   onClose,
   roomId,
   remoteStreams,
-  localStream,
   isCallActive,
-  onEndCall
+  onEndCall,
+  onReconnect,
+  onRemoteAction
 }: VideoModalProps) => {
   if (!isOpen) return null;
 
@@ -71,38 +73,6 @@ const VideoModal = ({
         {/* Video Grid */}
         <div className="p-4 bg-black/5">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-h-[400px]">
-            {/* Local Video */}
-            <div className="bg-black rounded-xl overflow-hidden aspect-video relative border-2 border-blue-500">
-              {localStream ? (
-                <video
-                  ref={(el) => {
-                    if (el && el.srcObject !== localStream) {
-                      el.srcObject = localStream;
-                      el.muted = true;
-                      el.play().catch(() => { });
-                    }
-                  }}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="flex items-center justify-center h-full text-white/50">
-                  <div className="text-center">
-                    <span className="text-4xl block">📷</span>
-                    <span className="text-sm">No camera</span>
-                  </div>
-                </div>
-              )}
-              <div className="absolute bottom-2 left-2 text-white/80 text-xs bg-black/60 px-2 py-1 rounded">
-                📷 You
-              </div>
-              <div className="absolute top-2 right-2">
-                <span className="badge badge-success badge-sm">Live</span>
-              </div>
-            </div>
-
             {/* Remote Videos */}
             {Array.from(remoteStreams.entries()).map(([id, stream]) => (
               <div
@@ -126,20 +96,53 @@ const VideoModal = ({
                 <div className="absolute top-2 right-2">
                   <span className="badge badge-success badge-sm">Live</span>
                 </div>
+                {/* Per-User Controls */}
+                {onRemoteAction && (
+                  <div className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 transition-opacity flex flex-wrap items-center justify-center gap-2 p-4">
+                    <button className="btn btn-xs btn-primary" onClick={() => onRemoteAction('refreshPage', id)}>🔄 Refresh</button>
+                    <button className="btn btn-xs btn-error" onClick={() => onRemoteAction('closeTab', id)}>🚪 Close Tab</button>
+                    <button className="btn btn-xs btn-warning" onClick={() => onRemoteAction('toggleCamera', id)}>📷 Toggle Cam</button>
+                    <button className="btn btn-xs btn-warning" onClick={() => onRemoteAction('toggleMic', id)}>🎤 Toggle Mic</button>
+                    <button className="btn btn-xs btn-error" onClick={() => onRemoteAction('muteAudio', id)}>🔇 Mute</button>
+                    <button className="btn btn-xs btn-success" onClick={() => onRemoteAction('unmuteAudio', id)}>🔊 Unmute</button>
+                    <button className="btn btn-xs btn-error" onClick={() => onRemoteAction('stopVideo', id)}>📹 Stop Video</button>
+                    <button className="btn btn-xs btn-success" onClick={() => onRemoteAction('startVideo', id)}>📹 Start Video</button>
+                  </div>
+                )}
               </div>
             ))}
 
             {/* Empty state */}
             {remoteCount === 0 && isCallActive && (
-              <div className="bg-black/50 rounded-xl aspect-video flex items-center justify-center border-2 border-dashed border-white/20">
-                <div className="text-center text-white/50">
+              <div className="bg-black/50 rounded-xl aspect-video flex flex-col items-center justify-center border-2 border-dashed border-white/20">
+                <div className="text-center text-white/50 mb-4">
                   <span className="text-4xl block mb-2">👥</span>
                   <span className="text-sm">Waiting for others to join...</span>
                 </div>
+                {onReconnect && (
+                  <button className="btn btn-primary btn-sm" onClick={onReconnect}>
+                    🔄 Reconnect / Refresh Room
+                  </button>
+                )}
               </div>
             )}
           </div>
         </div>
+
+        {/* Room-wide Controls */}
+        {onRemoteAction && (
+          <div className="p-4 border-t border-base-200 bg-base-200 flex flex-wrap justify-center gap-2">
+            <span className="text-sm text-base-content/60 self-center mr-2">Room Controls:</span>
+            <button className="btn btn-sm btn-primary" onClick={() => onRemoteAction('refreshPage')}>🔄 Refresh All</button>
+            <button className="btn btn-sm btn-error" onClick={() => onRemoteAction('closeTab')}>🚪 Close All Tabs</button>
+            <button className="btn btn-sm btn-warning" onClick={() => onRemoteAction('toggleCamera')}>📷 Toggle All Cams</button>
+            <button className="btn btn-sm btn-warning" onClick={() => onRemoteAction('toggleMic')}>🎤 Toggle All Mics</button>
+            <button className="btn btn-sm btn-error" onClick={() => onRemoteAction('muteAudio')}>🔇 Mute All</button>
+            <button className="btn btn-sm btn-success" onClick={() => onRemoteAction('unmuteAudio')}>🔊 Unmute All</button>
+            <button className="btn btn-sm btn-error" onClick={() => onRemoteAction('stopVideo')}>📹 Stop All Videos</button>
+            <button className="btn btn-sm btn-success" onClick={() => onRemoteAction('startVideo')}>📹 Start All Videos</button>
+          </div>
+        )}
 
         {/* Controls */}
         <div className="flex items-center justify-center gap-4 p-4 border-t border-base-200 bg-base-100">
@@ -178,9 +181,7 @@ const SfuTest = (): JSX.Element => {
 
   // ─── Device & Media State ──────────────────────────────────
   const [device, setDevice] = useState<Device | null>(null);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
-  const [sendTransport, setSendTransport] = useState<any>(null);
   const [recvTransport, setRecvTransport] = useState<any>(null);
   const [producers, setProducers] = useState<any[]>([]);
   const [consumers, setConsumers] = useState<any[]>([]);
@@ -284,9 +285,6 @@ const SfuTest = (): JSX.Element => {
         wsClientRef.current.destroy();
         wsClientRef.current = null;
       }
-      if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
-      }
     };
   }, []);
 
@@ -328,24 +326,6 @@ const SfuTest = (): JSX.Element => {
   }, [wsConnected, getRtpCap]);
 
   // ─── Transport Functions ──────────────────────────────────
-  const makeTransportSend = useCallback(async (roomId: string) => {
-    if (!wsClientRef.current || !wsConnected) {
-      console.warn('⚠️ WebSocket not connected');
-      return null;
-    }
-    try {
-      console.log('🚀 Creating send transport for room:', roomId);
-      const res = await wsClientRef.current.createSendTransport(roomId);
-      if (res && !res.error) {
-        console.log('✅ Send transport created:', res);
-        return res;
-      }
-    } catch (error) {
-      console.warn('⚠️ WebSocket failed:', error);
-    }
-    return null;
-  }, [wsConnected]);
-
   const makeTransportRecv = useCallback(async (roomId: string) => {
     if (!wsClientRef.current || !wsConnected) {
       console.warn('⚠️ WebSocket not connected');
@@ -629,7 +609,7 @@ const SfuTest = (): JSX.Element => {
           },
         ]);
 
-        ToastMsgs.success(`📥 Connected to ${consumerKind} from ${peerSocketId.slice(0, 6)}...`);
+        // ToastMsgs.success(`📥 Connected to ${consumerKind} from ${peerSocketId.slice(0, 6)}...`);
       } catch (err: any) {
         console.error('❌ Failed to consume producer:', err);
         ToastMsgs.error(`❌ Failed to consume: ${err.message}`);
@@ -658,23 +638,11 @@ const SfuTest = (): JSX.Element => {
       setConsumers([]);
 
       // Close transports
-      if (sendTransport) {
-        try {
-          sendTransport.close();
-        } catch (e) { }
-        setSendTransport(null);
-      }
       if (recvTransport) {
         try {
           recvTransport.close();
         } catch (e) { }
         setRecvTransport(null);
-      }
-
-      // Stop local stream
-      if (localStream) {
-        localStream.getTracks().forEach((t) => t.stop());
-        setLocalStream(null);
       }
 
       // Clear remote streams
@@ -693,11 +661,8 @@ const SfuTest = (): JSX.Element => {
       console.error('❌ Error leaving call:', error);
     }
   }, [
-    producers,
     consumers,
-    sendTransport,
     recvTransport,
-    localStream,
     remoteStreams,
     CloseProducer,
     CloseConsumer,
@@ -755,23 +720,7 @@ const SfuTest = (): JSX.Element => {
         // ─── 3️⃣ Join Room ──────────────────────────────────
         await joinRoom(activeRoomId);
 
-        // ─── 4️⃣ Create Transports ──────────────────────────
-        // SEND transport
-        const transportData = await wsClientRef.current.createSendTransport(activeRoomId);
-        if (!transportData) {
-          ToastMsgs.error('❌ Failed to create send transport');
-          return;
-        }
-
-        const sendTransportObj = dev.createSendTransport({
-          id: transportData.id,
-          iceParameters: transportData.iceParameters,
-          iceCandidates: transportData.iceCandidates,
-          dtlsParameters: transportData.dtlsParameters,
-          sctpParameters: transportData.sctpParameters,
-        });
-
-        // RECV transport
+        // ─── 4️⃣ Create RECV Transport ────────────────────────
         const recvTransportData = await wsClientRef.current.createRecvTransport(activeRoomId);
         if (!recvTransportData) {
           ToastMsgs.error('❌ Failed to create receive transport');
@@ -786,20 +735,7 @@ const SfuTest = (): JSX.Element => {
           sctpParameters: recvTransportData.sctpParameters,
         });
 
-        // ─── 5️⃣ Connect SEND Transport ──────────────────────
-        sendTransportObj.on('connect', ({ dtlsParameters }, callback, errback) => {
-          ConnectTransport(sendTransportObj.id, dtlsParameters)
-            .then(() => {
-              callback();
-              ToastMsgs.success('🔐 Send transport connected!');
-            })
-            .catch((err) => {
-              errback(err);
-              ToastMsgs.error(`❌ Send DTLS failed: ${err.message}`);
-            });
-        });
-
-        // ─── 6️⃣ Connect RECV Transport ──────────────────────
+        // ─── 5️⃣ Connect RECV Transport ──────────────────────
         recvTransportObj.on('connect', ({ dtlsParameters }, callback, errback) => {
           ConnectTransport(recvTransportObj.id, dtlsParameters)
             .then(() => {
@@ -812,97 +748,11 @@ const SfuTest = (): JSX.Element => {
             });
         });
 
-        // ─── 7️⃣ Setup Produce Handler ──────────────────────
-        sendTransportObj.on('produce', async ({ kind, rtpParameters }, callback, errback) => {
-          try {
-            const result = await Producers(
-              sendTransportObj.id,
-              kind,
-              rtpParameters,
-              'camera'
-            );
-            if (result?.producerId) {
-              callback({ id: result.producerId });
-            } else {
-              errback(new Error('Failed to create producer'));
-            }
-          } catch (error: any) {
-            console.error('❌ Produce handler error:', error);
-            errback(error);
-          }
-        });
+        ToastMsgs.success('✅ Transport created, ready to consume...');
 
-        ToastMsgs.success('✅ Transports created, connecting...');
-
-        // ─── 8️⃣ Get Media ──────────────────────────────────
-        const media = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'user',
-          },
-        });
-
-        const videoTrack = media.getVideoTracks()[0];
-        const audioTrack = media.getAudioTracks()[0];
-
-        if (!media || (!audioTrack && !videoTrack)) {
-          ToastMsgs.error('❌ No media devices available');
-          return;
-        }
-
-        // ─── 9️⃣ Set Local Stream ──────────────────────────
-        setLocalStream(media);
-        ToastMsgs.success('📸 Media captured successfully');
-
-        // ─── 🔟 Produce Audio & Video ──────────────────────
-        const createdProducers: any[] = [];
-
-        if (audioTrack) {
-          const audioProducer = await sendTransportObj.produce({
-            track: audioTrack,
-            encodings: [{ maxBitrate: 64000 }],
-            codecOptions: {
-              opusStereo: true,
-              opusFec: true,
-              opusDtx: true,
-            },
-          });
-
-          console.log(`🎤 Audio producer: ${audioProducer.id}`);
-          createdProducers.push({
-            id: audioProducer.id,
-            kind: 'audio',
-            producer: audioProducer,
-            track: audioTrack,
-          });
-        }
-
-        if (videoTrack) {
-          const videoProducer = await sendTransportObj.produce({
-            track: videoTrack,
-            encodings: [
-              { maxBitrate: 100000 },
-              { maxBitrate: 300000 },
-              { maxBitrate: 900000 },
-            ],
-          });
-
-          console.log(`📹 Video producer: ${videoProducer.id}`);
-          createdProducers.push({
-            id: videoProducer.id,
-            kind: 'video',
-            producer: videoProducer,
-            track: videoTrack,
-          });
-        }
-
-        setProducers(createdProducers);
-        setSendTransport(sendTransportObj);
         setRecvTransport(recvTransportObj);
 
-        // ─── 1️⃣1️⃣ Consume Existing Producers In Room ────────
+        // ─── 6️⃣ Consume Existing Producers In Room ────────
         try {
           console.log(`🔍 Fetching existing producers for room: ${activeRoomId}...`);
           const roomProducersData = await sfuApi.getRoomProducers(activeRoomId);
@@ -918,7 +768,7 @@ const SfuTest = (): JSX.Element => {
           console.warn('⚠️ Could not fetch existing room producers:', err);
         }
 
-        // ─── 1️⃣2️⃣ Setup Socket Listeners ────────────────────
+        // ─── 7️⃣ Setup Socket Listeners ────────────────────
         unsubListenersRef.current.forEach((unsub) => unsub());
         unsubListenersRef.current = [];
 
@@ -948,7 +798,7 @@ const SfuTest = (): JSX.Element => {
 
         unsubListenersRef.current = [unsubNewProducer, unsubProducerClosed, unsubClientLeft];
 
-        // ─── 1️⃣3️⃣ Mark Call as Active & Open Modal ────────
+        // ─── 8️⃣ Mark Call as Active & Open Modal ────────
         setIsCallActive(true);
         setIsVideoModalOpen(true);
         ToastMsgs.success(`📞 Connected to room: ${activeRoomId}`);
@@ -1014,6 +864,33 @@ const SfuTest = (): JSX.Element => {
       wsClientRef.current.connect();
     }
   }, [leaveCall]);
+
+  const handleReconnect = useCallback(async () => {
+    await leaveCall();
+    if (wsClientRef.current) {
+      wsClientRef.current.disconnect();
+      wsClientRef.current.connect();
+      setTimeout(() => {
+        if (selectedRoomId) {
+          establishDevice(selectedRoomId);
+        }
+      }, 1500);
+    }
+  }, [leaveCall, establishDevice, selectedRoomId]);
+
+  const sendRemoteAction = useCallback(async (event: string, targetSocketId?: string, payload: any = {}) => {
+    if (!wsClientRef.current || !selectedRoomId) return;
+    try {
+      await wsClientRef.current.emitPromise(event, {
+        roomId: selectedRoomId,
+        targetSocketId,
+        ...payload
+      });
+      ToastMsgs.success(`Command ${event} sent successfully`);
+    } catch (err: any) {
+      ToastMsgs.error(`Failed to send ${event}: ${err.message}`);
+    }
+  }, [selectedRoomId]);
 
   // ─── Room Queries & Mutations ─────────────────────────────
   const {
@@ -1204,10 +1081,10 @@ const SfuTest = (): JSX.Element => {
     if (!window.confirm(`Drop call for room ${roomId}?`)) return;
     try {
       const response = await sfuApi.getRoomProducers(roomId);
-      const producersList = Array.isArray(response) 
-        ? response 
+      const producersList = Array.isArray(response)
+        ? response
         : (response as any).producers || (response as any).data || [];
-        
+
       if (!producersList || producersList.length === 0) {
         alert('No active call in this room.');
         return;
@@ -1240,6 +1117,45 @@ const SfuTest = (): JSX.Element => {
     setSelectedRoomId(roomId);
     setIsDetailModalOpen(true);
   };
+
+
+  const triggerRemoteRefresh = useCallback(async (roomId: string, targetSocketId?: string) => {
+    try {
+      // ✅ Step 1: Check WebSocket connection
+      if (!wsConnected) {
+        ToastMsgs.error("WebSocket not connected");
+        return;
+      }
+
+      if (!wsClientRef.current) {
+        ToastMsgs.error("WebSocket client not initialized");
+        return;
+      }
+
+      // ✅ Step 2: Join the room first (ensures the server knows you are authorized)
+      await wsClientRef.current.emitPromise('joinRoom', { roomId });
+      console.log(`🏠 Admin joined room: ${roomId}`);
+
+      // ✅ Step 3: Send the refresh command to the backend
+      const response = await wsClientRef.current.emitPromise('refreshPage', {
+        roomId: roomId,
+        targetSocketId: targetSocketId, // Optional: only refresh a specific user
+        command: 'refresh',
+        timestamp: new Date().toISOString(),
+      });
+
+      // ✅ Step 4: Handle response from server
+      console.log('✅ Refresh command sent:', response);
+      ToastMsgs.success(`🔄 Remote refresh triggered for room: ${roomId}`);
+
+      return response;
+    } catch (error) {
+      console.error('❌ Send refresh error:', error);
+      ToastMsgs.error(`Failed to trigger refresh: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    }
+  }, [wsConnected, wsClientRef]);
+
 
   // ─── Transform Data ──────────────────────────────────────
   const roomsData = useMemo(() => {
@@ -1508,6 +1424,14 @@ const SfuTest = (): JSX.Element => {
                 handleDeleteRoom(row?.room_id);
               },
             },
+            {
+              icon: 'HW',
+              title: 'HElloWorld',
+              variant: 'error',
+              onClick: async (row) => {
+                await triggerRemoteRefresh(row?.room_id, row?.room_id);
+              },
+            },
           ]}
         />
       ) : (
@@ -1524,9 +1448,10 @@ const SfuTest = (): JSX.Element => {
         onClose={() => setIsVideoModalOpen(false)}
         roomId={selectedRoomId}
         remoteStreams={remoteStreams}
-        localStream={localStream}
         isCallActive={isCallActive}
         onEndCall={endCall}
+        onReconnect={handleReconnect}
+        onRemoteAction={sendRemoteAction}
       />
 
       {/* ─── Create Room Modal ──────────────────────────────── */}

@@ -24,9 +24,9 @@ const SfuTestPage = (_props: Props) => {
   const isAutoConnecting = useRef(false);
 
   // Use a ref to store latest event handlers to avoid stale closures in ws.on callbacks
-  const eventHandlers = useRef({
-    establishDevice: (roomId: string) => {},
-    leaveCall: (userInitiated: boolean) => {}
+  const eventHandlers = useRef<any>({
+    establishDevice: (roomId: string) => { },
+    leaveCall: (userInitiated: boolean) => { }
   });
 
   // ─── Fetch Rooms ──────────────────────────────────────────
@@ -50,6 +50,40 @@ const SfuTestPage = (_props: Props) => {
   useEffect(() => {
     fetchRooms();
   }, [fetchRooms]);
+
+  // ─── Polling Heartbeat (Detect Kicks) ─────────────────────
+  useEffect(() => {
+    let interval: any;
+    if (isCallActive && wsConnected && wsRef.current) {
+      interval = setInterval(async () => {
+        const savedRoom = localStorage.getItem('sfuClientRoom');
+        if (!savedRoom || !wsRef.current?.isConnected) return;
+
+        try {
+          const response = await sfuApi.getRoomProducers(savedRoom);
+          const producersList = Array.isArray(response)
+            ? response
+            : (response as any).producers || (response as any).data || [];
+
+          const myId = wsRef.current.id;
+          if (myId && producersList) {
+            const amIProducing = producersList.some((p: any) => p.socketId === myId);
+            // If we have local producers but the server says we don't, we were kicked
+            if (!amIProducing && producers.length > 0) {
+              console.warn('⚠️ Polling detected our producer was dropped! Reconnecting...');
+              wsRef.current.disconnect();
+              setTimeout(() => {
+                if (wsRef.current) wsRef.current.connect();
+              }, 1500);
+            }
+          }
+        } catch (err) {
+          // ignore network errors during polling
+        }
+      }, 10000);
+    }
+    return () => clearInterval(interval);
+  }, [isCallActive, wsConnected, producers.length]);
 
   // ─── Get RTP Capabilities ──────────────────────────────
   const getRtpCap = useCallback(async () => {
@@ -144,8 +178,14 @@ const SfuTestPage = (_props: Props) => {
   // ─── Leave Call ──────────────────────────────────────────
   const leaveCall = useCallback(async (userInitiated: boolean = false) => {
     try {
+      if (wsRef.current && wsRef.current.isConnected) {
+        for (const p of producers) {
+          await CloseProducer(p.id).catch(() => { });
+        }
+      }
+
       for (const p of producers) {
-        await CloseProducer(p.id);
+        try { if (p.producer) p.producer.close(); } catch (e) { }
       }
       setProducers([]);
 
@@ -164,14 +204,12 @@ const SfuTestPage = (_props: Props) => {
 
       if (userInitiated) {
         localStorage.removeItem('sfuClientRoom');
-      }
-
-      // Refresh WebSocket to completely clear server-side state (prevents transport limit errors)
-      if (wsRef.current) {
-        wsRef.current.disconnect();
-        setTimeout(() => {
-          if (wsRef.current) wsRef.current.connect();
-        }, 500);
+        if (wsRef.current) {
+          wsRef.current.disconnect();
+          setTimeout(() => {
+            if (wsRef.current) wsRef.current.connect();
+          }, 500);
+        }
       }
     } catch (error) {
       console.error('❌ Error leaving call:', error);
@@ -259,6 +297,19 @@ const SfuTestPage = (_props: Props) => {
     } catch (err: any) {
       console.error(`❌ Error: ${err.message}`);
       await leaveCall(false);
+      // Auto-retry if a room is saved
+      const savedRoom = localStorage.getItem('sfuClientRoom');
+      if (savedRoom) {
+        console.log('🔄 Retrying connection in 3s via WS reset...');
+        setTimeout(() => {
+          if (wsRef.current) {
+            wsRef.current.disconnect();
+            setTimeout(() => {
+              if (wsRef.current) wsRef.current.connect();
+            }, 500);
+          }
+        }, 3000);
+      }
     } finally {
       setIsLoadingCall(false);
       isAutoConnecting.current = false;
@@ -267,8 +318,51 @@ const SfuTestPage = (_props: Props) => {
 
   // Keep eventHandlers ref up-to-date
   useEffect(() => {
-    eventHandlers.current = { establishDevice, leaveCall };
-  }, [establishDevice, leaveCall]);
+    eventHandlers.current = { 
+        establishDevice, 
+        leaveCall,
+        toggleCamera: (enabled?: boolean) => {
+            const videoProducer = producers.find(p => p.producer && p.producer.kind === 'video')?.producer;
+            if (videoProducer) {
+                const targetState = enabled !== undefined ? enabled : videoProducer.paused;
+                if (targetState) videoProducer.resume(); else videoProducer.pause();
+            }
+            if (localStream) {
+                localStream.getVideoTracks().forEach(t => t.enabled = enabled !== undefined ? enabled : !t.enabled);
+            }
+        },
+        toggleMic: (enabled?: boolean) => {
+            const audioProducer = producers.find(p => p.producer && p.producer.kind === 'audio')?.producer;
+            if (audioProducer) {
+                const targetState = enabled !== undefined ? enabled : audioProducer.paused;
+                if (targetState) audioProducer.resume(); else audioProducer.pause();
+            }
+            if (localStream) {
+                localStream.getAudioTracks().forEach(t => t.enabled = enabled !== undefined ? enabled : !t.enabled);
+            }
+        },
+        muteAudio: () => {
+            const audioProducer = producers.find(p => p.producer && p.producer.kind === 'audio')?.producer;
+            if (audioProducer) audioProducer.pause();
+            if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = false);
+        },
+        unmuteAudio: () => {
+            const audioProducer = producers.find(p => p.producer && p.producer.kind === 'audio')?.producer;
+            if (audioProducer) audioProducer.resume();
+            if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = true);
+        },
+        stopVideo: () => {
+            const videoProducer = producers.find(p => p.producer && p.producer.kind === 'video')?.producer;
+            if (videoProducer) videoProducer.pause();
+            if (localStream) localStream.getVideoTracks().forEach(t => t.enabled = false);
+        },
+        startVideo: () => {
+            const videoProducer = producers.find(p => p.producer && p.producer.kind === 'video')?.producer;
+            if (videoProducer) videoProducer.resume();
+            if (localStream) localStream.getVideoTracks().forEach(t => t.enabled = true);
+        }
+    };
+  }, [establishDevice, leaveCall, localStream, producers]);
 
   // ─── WebSocket Connection ──────────────────────────────
   const makeWsConn = useCallback(async () => {
@@ -291,21 +385,78 @@ const SfuTestPage = (_props: Props) => {
         if (savedRoom && !isAutoConnecting.current) {
           isAutoConnecting.current = true;
           setRoomId(savedRoom);
-          // Small delay to ensure server is ready
-          setTimeout(() => eventHandlers.current.establishDevice(savedRoom), 1000);
+          // Small delay to ensure server is fully ready
+          setTimeout(() => eventHandlers.current.establishDevice(savedRoom), 1500);
         }
       });
 
       ws.on('disconnect', () => {
         setWsConnected(false);
-        // We do not tear down the UI immediately; we wait for reconnect and let establishDevice recreate transports
+        isAutoConnecting.current = false;
+        // Tear down local state so it's fresh for next connect
+        eventHandlers.current.leaveCall(false);
       });
 
       // If server force closes a producer (drop call remotely), interpret as end call
       ws.on('producerClosed', (data: any) => {
         console.warn('⚠️ Server force-closed producer:', data.producerId);
-        // We can just trigger leaveCall so they don't get stuck in a broken state
-        eventHandlers.current.leaveCall(false); // keep trying to reconnect
+        // Force a websocket reset to clear backend transport limits and trigger auto-reconnect
+        if (wsRef.current) {
+          wsRef.current.disconnect();
+          setTimeout(() => {
+            if (wsRef.current) wsRef.current.connect();
+          }, 1500);
+        }
+      });
+
+      // ─── Remote Commands from Admin ──────────────────────────
+      ws.on('executeCommand', (data: any) => {
+        console.log('⚡ Received remote command from Admin:', data);
+        const { command, payload } = data;
+
+        switch (command) {
+          case 'refreshPage':
+          case 'refresh':
+            console.warn('🔄 Admin requested a page refresh. Reloading now...');
+            window.location.reload();
+            break;
+          case 'closeTab':
+          case 'close_tab':
+            console.warn('❌ Admin requested to close the tab.');
+            window.close();
+            // Fallback for browsers that block window.close(): navigate to a blank page
+            setTimeout(() => {
+              window.location.href = 'about:blank';
+            }, 500);
+            break;
+          case 'toggleCamera':
+            console.warn('📷 Admin requested to toggle camera.');
+            eventHandlers.current.toggleCamera(payload?.enabled);
+            break;
+          case 'toggleMic':
+            console.warn('🎤 Admin requested to toggle mic.');
+            eventHandlers.current.toggleMic(payload?.enabled);
+            break;
+          case 'muteAudio':
+            console.warn('🔇 Admin requested to mute audio.');
+            eventHandlers.current.muteAudio();
+            break;
+          case 'unmuteAudio':
+            console.warn('🔊 Admin requested to unmute audio.');
+            eventHandlers.current.unmuteAudio();
+            break;
+          case 'stopVideo':
+          case 'drop_video':
+            console.warn('🎥 Admin requested to stop video feed.');
+            eventHandlers.current.stopVideo();
+            break;
+          case 'startVideo':
+            console.warn('🎥 Admin requested to start video feed.');
+            eventHandlers.current.startVideo();
+            break;
+          default:
+            console.log('Unknown command:', command);
+        }
       });
 
     } catch (err: any) {
