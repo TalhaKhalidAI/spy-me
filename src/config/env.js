@@ -57,6 +57,8 @@ const envSchema = z.object({
 
   // CORS
   CORS_ORIGIN: z.string().default('*'),
+  STUN_SERVERS: z.string().default('stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302,stun:stun2.l.google.com:19302'),
+  TURN_SERVERS: z.string().optional(),
 });
 
 // Parse environment variables
@@ -97,8 +99,35 @@ const parseEnv = () => {
       ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
       ADMIN_EMAIL: process.env.ADMIN_EMAIL,
       CORS_ORIGIN: process.env.CORS_ORIGIN,
+      STUN_SERVERS: process.env.STUN_SERVERS,
+      TURN_SERVERS: process.env.TURN_SERVERS,
     });
 
+    const stunServersArray = env.STUN_SERVERS
+      ? env.STUN_SERVERS.split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+
+    // ✅ Convert TURN to array (JSON)
+    let turnServersArray = [];
+    if (env.TURN_SERVERS) {
+      try {
+        const parsed = JSON.parse(env.TURN_SERVERS);
+        turnServersArray = Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.warn('⚠️ Failed to parse TURN_SERVERS:', e.message);
+      }
+    }
+
+       const iceServers = [];
+    for (const stunUrl of stunServersArray) {
+      iceServers.push({ urls: stunUrl });
+    }
+    for (const turnServer of turnServersArray) {
+      iceServers.push(turnServer);
+    }
+    env.stunServersArray = stunServersArray;
+    env.turnServersArray = turnServersArray;
+    env.iceServers = iceServers;
     if (env.NODE_ENV === 'development') {
       console.log('✅ Environment variables validated successfully');
       console.log(`📊 DATABASE_URL: ${maskDatabaseUrl(env.DATABASE_URL)}`);

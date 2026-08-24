@@ -132,7 +132,10 @@ export class TransportManager extends EventEmitter {
             if (!router) {
                 throw new Error(`Router for room ${roomId} not found`);
             }
-
+            const iceServerss = env.iceServers || [];
+            if (iceServerss.length>0){
+                console.log("ice server exist",iceServerss)
+            }
             // Create the transport
             const transport = await router.createWebRtcTransport({
                 listenIps: [
@@ -141,6 +144,7 @@ export class TransportManager extends EventEmitter {
                         announcedIp: options.announcedIp || this.#config.announcedIp
                     }
                 ],
+                iceServers:iceServerss,
                 enableUdp: options.enableUdp !== undefined ? options.enableUdp : this.#config.enableUdp,
                 enableTcp: options.enableTcp !== undefined ? options.enableTcp : this.#config.enableTcp,
                 preferUdp: options.preferUdp !== undefined ? options.preferUdp : this.#config.preferUdp,
