@@ -213,7 +213,7 @@ const SfuTest = (): JSX.Element => {
     }
 
     const client = new WebSocketClient({
-      url: import.meta.env.VITE_WS_URL || "ws://localhost:9090",
+      url: import.meta.env.VITE_WS_URL || window.location.origin,
       autoConnect: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
@@ -1345,6 +1345,7 @@ const SfuTest = (): JSX.Element => {
             <span className="text-xs text-base-content/50">Off</span>
             <input type="checkbox" className="toggle toggle-primary toggle-sm" checked={wsConnected} onChange={toggleWebSocket} />
             <span className="text-xs text-base-content/50">On</span>
+
           </label>
           {wsConnected && (
             <button className="btn btn-ghost btn-xs btn-square text-error" onClick={disconnectWebSocket} title="Disconnect">✕</button>

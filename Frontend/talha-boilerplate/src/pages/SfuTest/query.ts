@@ -51,7 +51,7 @@ export const useSFUStatus = (
   return useQuery({
     queryKey: sfuKeys.status(),
     queryFn: () => sfuApi.getStatus(),
- 
+
     staleTime: 3000,
     // ✅ Provide default empty object
     initialData: {} as SFUStatus,
@@ -105,8 +105,8 @@ export const useRooms = (
   return useQuery({
     queryKey: sfuKeys.rooms(),
     queryFn: () => sfuApi.getRooms(),
-    
-    staleTime: 2000,
+
+    staleTime: 15000,
     initialData: [], // ✅ This ensures rooms is always an array
     ...options,
   });
@@ -120,8 +120,8 @@ export const useRoom = (
     queryKey: sfuKeys.room(roomId),
     queryFn: () => sfuApi.getRoom(roomId),
     enabled: !!roomId,
-    refetchInterval: 3000,
-    staleTime: 2000,
+    refetchInterval: 15000,
+    staleTime: 10000,
     initialData: {} as RoomDetail,
     ...options,
   });
@@ -135,8 +135,8 @@ export const useRoomProducers = (
     queryKey: sfuKeys.roomProducers(roomId),
     queryFn: () => sfuApi.getRoomProducers(roomId),
     enabled: !!roomId,
-    refetchInterval: 3000,
-    staleTime: 2000,
+    refetchInterval: 15000,
+    staleTime: 10000,
     initialData: { roomId, producers: [], total: 0 },
     ...options,
   });
@@ -150,8 +150,8 @@ export const useRoomConsumers = (
     queryKey: sfuKeys.roomConsumers(roomId),
     queryFn: () => sfuApi.getRoomConsumers(roomId),
     enabled: !!roomId,
-    refetchInterval: 3000,
-    staleTime: 2000,
+    refetchInterval: 15000,
+    staleTime: 10000,
     initialData: { roomId, consumers: [], total: 0 },
     ...options,
   });

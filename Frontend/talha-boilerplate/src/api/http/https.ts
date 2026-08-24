@@ -66,17 +66,17 @@ axiosInstance.interceptors.request.use(
   (config) => {
     // ✅ Cookies are sent automatically with withCredentials: true
     // No need to add Authorization header!
-    
+
     config.headers['X-Request-ID'] = crypto.randomUUID?.() || Date.now().toString();
     config.headers['X-App-Version'] = import.meta.env.VITE_APP_VERSION || '1.0.0';
-    
+
     // ✅ Debug log
     console.log('📤 Request:', {
       url: config.url,
       method: config.method,
       hasCredentials: true,
     });
-    
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -96,7 +96,7 @@ axiosInstance.interceptors.response.use(
         'DELETE': 'Deleted successfully',
         'PATCH': 'Updated successfully'
       }
-      
+
       const message = successMessages[method || '']
       if (message && response.status >= 200 && response.status < 300) {
         ToastMsgs.success(message)
@@ -207,7 +207,7 @@ axiosInstance.interceptors.response.use(
 //         'DELETE': 'Deleted successfully',
 //         'PATCH': 'Updated successfully'
 //       }
-      
+
 //       const message = successMessages[method || '']
 //       if (message && response.status >= 200 && response.status < 300) {
 //         ToastMsgs.success(message)

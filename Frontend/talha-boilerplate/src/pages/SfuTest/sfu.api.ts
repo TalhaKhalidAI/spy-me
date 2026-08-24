@@ -42,10 +42,16 @@ const apiClient = async <T>(
       ...options,
     });
 
-    // ✅ Handle 503 gracefully (SFU not running)
-    if (response.status === 503) {
+    // ✅ Handle 503 (SFU not running) & 429 (Rate limited) gracefully
+    if (response.status === 503 || response.status === 429) {
       if (endpoint.includes('/rooms') && !endpoint.includes('/rooms/')) {
         return [] as T;
+      }
+      if (endpoint.includes('/producers')) {
+        return { producers: [], total: 0 } as T;
+      }
+      if (endpoint.includes('/consumers')) {
+        return { consumers: [], total: 0 } as T;
       }
       return {} as T;
     }

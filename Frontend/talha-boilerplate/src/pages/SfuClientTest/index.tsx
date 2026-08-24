@@ -321,20 +321,20 @@ const SfuTestPage = (_props: Props) => {
     const handleHardware = async (kind: 'video' | 'audio', enable: boolean) => {
       const prodObj = producers.find(p => p.producer && p.producer.kind === kind);
       const producer = prodObj?.producer;
-      
+
       if (enable) {
         // TURN ON: Request new hardware access
         try {
-          const constraints = kind === 'video' 
+          const constraints = kind === 'video'
             ? { video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } }
             : { audio: true };
           const stream = await navigator.mediaDevices.getUserMedia(constraints);
           const newTrack = kind === 'video' ? stream.getVideoTracks()[0] : stream.getAudioTracks()[0];
-          
+
           if (newTrack && producer) {
             await producer.replaceTrack({ track: newTrack });
             producer.resume();
-            
+
             // Update localStream
             if (localStream) {
               const oldTrack = kind === 'video' ? localStream.getVideoTracks()[0] : localStream.getAudioTracks()[0];
@@ -353,9 +353,9 @@ const SfuTestPage = (_props: Props) => {
         if (producer) {
           producer.pause();
           // Optional but extremely effective: replace track with null to detach it from WebRTC
-          try { await producer.replaceTrack({ track: null }); } catch(e) {}
+          try { await producer.replaceTrack({ track: null }); } catch (e) { }
         }
-        
+
         if (localStream) {
           const tracks = kind === 'video' ? localStream.getVideoTracks() : localStream.getAudioTracks();
           tracks.forEach(t => {
@@ -392,7 +392,7 @@ const SfuTestPage = (_props: Props) => {
       if (wsRef.current?.connected) return;
 
       const ws = new WebSocketClient({
-        url: import.meta.env.VITE_WS_URL || 'ws://localhost:9090',
+        url: import.meta.env.VITE_WS_URL || window.location.origin,
         autoConnect: true,
         reconnectionAttempts: 9999, // keep trying infinitely
         reconnectionDelay: 2000,

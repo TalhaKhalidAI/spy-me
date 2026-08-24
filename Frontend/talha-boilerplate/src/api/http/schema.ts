@@ -12,7 +12,7 @@ export function validateUrl(url: string): string {
   }
 
   const UrlSchema = z.string().url('Invalid URL format')
- 
+
   try {
     return UrlSchema.parse(url.trim())
   } catch (error) {
