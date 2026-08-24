@@ -5,7 +5,7 @@ interface ActiveCallViewerProps {
   roomId: string;
   targetPeer: string;
 }
-const wsurl=import.meta.env.VITE_WS_URL
+const wsurl = import.meta.env.VITE_WS_URL
 export function ActiveCallViewer({ roomId, targetPeer }: ActiveCallViewerProps) {
   const [status, setStatus] = useState<string>('Initializing...');
   const wsRef = useRef<WebSocket | null>(null);
@@ -15,18 +15,18 @@ export function ActiveCallViewer({ roomId, targetPeer }: ActiveCallViewerProps) 
   useEffect(() => {
     // Generate a temporary admin peer ID for this connection
     const adminPeerId = `admin_${Math.floor(Math.random() * 10000)}`;
-    
+
     // Connect WebSocket
     const host = window.location.hostname;
     const port = 5050; // Use same port as LiveCall
     const url = `${wsurl}/webrtc/${roomId}/${adminPeerId}`;
-    
+
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
       setStatus('Signaling Connected. Starting Call...');
-      
+
       // Initialize PeerConnection
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -70,16 +70,16 @@ export function ActiveCallViewer({ roomId, targetPeer }: ActiveCallViewerProps) 
     ws.onmessage = async (event) => {
       try {
         const msg = JSON.parse(event.data);
-        
+
         if (msg.type === "offer_created" && pcRef.current) {
           // Server generated an offer for us
           setStatus('Negotiating...');
           const offer = new RTCSessionDescription({ type: 'offer', sdp: msg.sdp });
           await pcRef.current.setRemoteDescription(offer);
-          
+
           const answer = await pcRef.current.createAnswer();
           await pcRef.current.setLocalDescription(answer);
-          
+
           ws.send(JSON.stringify({
             type: 'handle_answer',
             sdp: answer.sdp
@@ -115,13 +115,13 @@ export function ActiveCallViewer({ roomId, targetPeer }: ActiveCallViewerProps) 
           {status}
         </Typography>
       </Box>
-      
-      <Box 
-        bgcolor="black" 
-        borderRadius={1} 
-        overflow="hidden" 
-        display="flex" 
-        alignItems="center" 
+
+      <Box
+        bgcolor="black"
+        borderRadius={1}
+        overflow="hidden"
+        display="flex"
+        alignItems="center"
         justifyContent="center"
         height={200}
         position="relative"

@@ -19,9 +19,10 @@ import { errorHandler } from './src/api/middleware/error.middleware.js';
 import swaggerSpec from './src/config/swagger.js';
 import apiRouter from './src/api/index.js';
 import { randomUUID } from 'crypto';
+
 // ✅ Import SFU
 import sfu from './src/services/mediasoup/index.js';
-
+ 
 const app = express();
 
 /**
@@ -112,6 +113,7 @@ app.use((req, res, next) => {
 const limiter = rateLimit({
     windowMs:env.RATE_LIMIT_WINDOW_MS || 900000,
     max: env.RATE_LIMIT_MAX||100,
+    
     standardHeaders: true,
     legacyHeaders: false,
     message: { status: 'fail', message: 'Too many requests, please try again after 15 minutes.' },
@@ -800,8 +802,8 @@ const start = async () => {
     try {
         // ✅ Initialize SFU first
         await sfu.initialize({
-            listenIp: '0.0.0.0',
-            announcedIp: '127.0.0.1',
+            listenIp:env.LISTEN_IP,
+            announcedIp:env.ANNOUNCED_IP,
         });
         console.log('✅ SFU initialized');
 

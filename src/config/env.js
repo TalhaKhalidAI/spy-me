@@ -5,12 +5,13 @@ import path from 'path';
 
 // Load .env file
 dotenv.config({ path: path.join(process.cwd(), '.env') });
+const ipRegex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 
 // Define Zod schema
 const envSchema = z.object({
   // Environment
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
- RATE_LIMIT_MAX: z.coerce.number().min(1).max(10000).default(100),
+RATE_LIMIT_MAX: z.coerce.number().min(1).max(10000).default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().min(1000).max(3600000).default(900000),
   // Logger Configuration
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('info'),
@@ -59,6 +60,10 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   STUN_SERVERS: z.string().default('stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302,stun:stun2.l.google.com:19302'),
   TURN_SERVERS: z.string().optional(),
+
+// In envSchema:
+LISTEN_IP: z.string().regex(ipRegex, 'Invalid IP address').default('0.0.0.0'),
+ANNOUNCED_IP: z.string().regex(ipRegex, 'Invalid IP address').default('127.0.0.1'),
 });
 
 // Parse environment variables
@@ -101,6 +106,9 @@ const parseEnv = () => {
       CORS_ORIGIN: process.env.CORS_ORIGIN,
       STUN_SERVERS: process.env.STUN_SERVERS,
       TURN_SERVERS: process.env.TURN_SERVERS,
+
+      LISTEN_IP: process.env.LISTEN_IP,
+      ANNOUNCED_IP: process.env.ANNOUNCED_IP,
     });
 
     const stunServersArray = env.STUN_SERVERS
@@ -137,12 +145,20 @@ const parseEnv = () => {
   } catch (error) {
     console.error('❌ Environment validation failed:');
 
-    if (error instanceof z.ZodError) {
-      error.errors.forEach(err => {
-        console.error(`  - ${err.path.join('.')}: ${err.message}`);
-      });
-    } else if (error instanceof Error) {
-      console.error(`  - ${error.message}`);
+    // ✅ FIXED: Safe error handling
+    if (error && typeof error === 'object') {
+      // Check if it's a ZodError
+      if ('errors' in error && Array.isArray(error.errors)) {
+        error.errors.forEach(err => {
+          console.error(`  - ${err.path.join('.')}: ${err.message}`);
+        });
+      } else if (error instanceof Error) {
+        console.error(`  - ${error.message}`);
+        // Show full error for debugging
+        console.error(`  - Details:`, error);
+      } else {
+        console.error(`  - Unknown error:`, error);
+      }
     } else {
       console.error(`  - Unknown error:`, error);
     }

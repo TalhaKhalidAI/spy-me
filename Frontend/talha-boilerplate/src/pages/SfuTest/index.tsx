@@ -733,6 +733,11 @@ const SfuTest = (): JSX.Element => {
           iceCandidates: recvTransportData.iceCandidates,
           dtlsParameters: recvTransportData.dtlsParameters,
           sctpParameters: recvTransportData.sctpParameters,
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' }
+          ]
         });
 
         // ─── 5️⃣ Connect RECV Transport ──────────────────────

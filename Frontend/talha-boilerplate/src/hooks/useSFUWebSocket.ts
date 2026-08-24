@@ -204,6 +204,11 @@ export function useSFUWebSocket(
       iceCandidates: data.iceCandidates,
       dtlsParameters: data.dtlsParameters,
       sctpParameters: data.sctpParameters,
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' }
+      ]
     });
 
     transport.on('connect', ({ dtlsParameters }, callback) => {
@@ -247,6 +252,11 @@ export function useSFUWebSocket(
       iceCandidates: data.iceCandidates,
       dtlsParameters: data.dtlsParameters,
       sctpParameters: data.sctpParameters,
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' }
+      ]
     });
 
     transport.on('connect', ({ dtlsParameters }, callback) => {
