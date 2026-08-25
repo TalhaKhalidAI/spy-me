@@ -19,32 +19,47 @@ export class RouterManager {
         this.#logger.info('[RouterManager] Initialized');
     }
     
-    #defaultCodecs() {
-        return [
-            {
-                kind: 'audio',
-                mimeType: 'audio/opus',
-                clockRate: 48000,
-                channels: 2,
+#defaultCodecs() {
+    return [
+        {
+            kind: 'audio',
+            mimeType: 'audio/opus',
+            clockRate: 48000,
+            channels: 2,
+        },
+        {
+            kind: 'video',
+            mimeType: 'video/VP8',
+            clockRate: 90000,
+            parameters: {
+                'x-google-start-bitrate': 1000,
             },
-            {
-                kind: 'video',
-                mimeType: 'video/VP8',
-                clockRate: 90000,
-                payloadType: 100,
+            rtcpFeedback: [
+                { type: 'nack' },
+                { type: 'nack', parameter: 'pli' },
+                { type: 'ccm', parameter: 'fir' },
+                { type: 'goog-remb' },
+                { type: 'transport-cc' },
+            ],
+        },
+        {
+            kind: 'video',
+            mimeType: 'video/H264',
+            clockRate: 90000,
+            parameters: {
+                'packetization-mode': 1,
+                'level-asymmetry-allowed': 1,
             },
-            {
-                kind: 'video',
-                mimeType: 'video/H264',
-                clockRate: 90000,
-                payloadType: 101,
-                parameters: {
-                    'packetization-mode': 1,
-                    'level-asymmetry-allowed': 1,
-                },
-            },
-        ];
-    }
+            rtcpFeedback: [
+                { type: 'nack' },
+                { type: 'nack', parameter: 'pli' },
+                { type: 'ccm', parameter: 'fir' },
+                { type: 'goog-remb' },
+                { type: 'transport-cc' },
+            ],
+        },
+    ];
+}
     /**
      * Close all routers (graceful shutdown)
      * @returns {Promise<void>}

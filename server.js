@@ -22,7 +22,7 @@ import { randomUUID } from 'crypto';
 
 // ✅ Import SFU
 import sfu from './src/services/mediasoup/index.js';
- 
+
 const app = express();
 
 /**
@@ -111,9 +111,9 @@ app.use((req, res, next) => {
 
 // ─── Rate Limiting ───────────────────────────────────────────────────────────
 const limiter = rateLimit({
-    windowMs:env.RATE_LIMIT_WINDOW_MS || 900000,
-    max: env.RATE_LIMIT_MAX||100,
-    
+    windowMs: env.RATE_LIMIT_WINDOW_MS || 900000,
+    max: env.RATE_LIMIT_MAX || 100,
+
     standardHeaders: true,
     legacyHeaders: false,
     message: { status: 'fail', message: 'Too many requests, please try again after 15 minutes.' },
@@ -406,7 +406,9 @@ io.on('connection', (socket) => {
                 rtpCapabilities,
                 options: { paused: false },
             });
-
+            if (consumer.kind === 'video') {
+                await consumer.requestKeyFrame();
+            }
             if (callback) {
                 callback({
                     consumerId: consumer.id,
@@ -466,18 +468,25 @@ io.on('connection', (socket) => {
     });
 
     // ─── 1️⃣0️⃣ resumeConsumer ──────────────────────────────────────
-    socket.on('resumeConsumer', async (...args) => {
-        const callback = extractCallback(...args);
-        const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
-        try {
-            await sfu.resumeConsumer(data.consumerId);
-            if (callback) callback({ success: true });
-            console.log(`▶️ Consumer resumed: ${data.consumerId}`);
-        } catch (error) {
-            console.error(`❌ resumeConsumer error:`, error.message);
-            if (callback) callback({ error: error.message });
+socket.on('resumeConsumer', async (...args) => {
+    const callback = extractCallback(...args);
+    const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
+    try {
+        await sfu.resumeConsumer(data.consumerId);
+
+        // ✅ Fetch the real consumer, then request keyframe
+        const consumer = sfu.consumerManager.getConsumer(data.consumerId);
+        if (consumer && consumer.kind === 'video') {
+            await consumer.requestKeyFrame();
         }
-    });
+
+        if (callback) callback({ success: true });
+        console.log(`▶️ Consumer resumed: ${data.consumerId}`);
+    } catch (error) {
+        console.error(`❌ resumeConsumer error:`, error.message);
+        if (callback) callback({ error: error.message });
+    }
+});
 
     // ─── 1️⃣1️⃣ closeProducer ──────────────────────────────────────
     socket.on('closeProducer', async (...args) => {
@@ -547,7 +556,6 @@ io.on('connection', (socket) => {
     socket.on('refreshPage', async (...args) => {
         const callback = extractCallback(...args);
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
-        
         try {
             const { roomId, targetSocketId } = data;
 
@@ -559,7 +567,7 @@ io.on('connection', (socket) => {
             if (targetSocketId) {
                 socket.to(targetSocketId).emit('executeCommand', { command: 'refresh' });
                 console.log(`🔄 Sent refresh command to specific client: ${targetSocketId}`);
-            } 
+            }
             // 2. Otherwise, broadcast the command to EVERYONE in the room
             else {
                 socket.to(roomId).emit('executeCommand', { command: 'refresh' });
@@ -579,206 +587,206 @@ io.on('connection', (socket) => {
         }
     });
 
-socket.on('closeTab', async (...args) => {
-    const callback = extractCallback(...args);
-    const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
-    
-    try {
-        const { roomId, targetSocketId } = data;
-        if (!roomId) throw new Error('roomId is required');
+    socket.on('closeTab', async (...args) => {
+        const callback = extractCallback(...args);
+        const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
-        if (targetSocketId) {
-            socket.to(targetSocketId).emit('executeCommand', { command: 'closeTab' });
-            console.log(`🚪 Sent close tab to specific client: ${targetSocketId}`);
-        } else {
-            socket.to(roomId).emit('executeCommand', { command: 'closeTab' });
-            console.log(`🚪 Broadcasted close tab to room: ${roomId}`);
+        try {
+            const { roomId, targetSocketId } = data;
+            if (!roomId) throw new Error('roomId is required');
+
+            if (targetSocketId) {
+                socket.to(targetSocketId).emit('executeCommand', { command: 'closeTab' });
+                console.log(`🚪 Sent close tab to specific client: ${targetSocketId}`);
+            } else {
+                socket.to(roomId).emit('executeCommand', { command: 'closeTab' });
+                console.log(`🚪 Broadcasted close tab to room: ${roomId}`);
+            }
+
+            if (callback) callback({ success: true, roomId });
+        } catch (error) {
+            console.error(`❌ closeTab error:`, error.message);
+            if (callback) callback({ error: error.message });
         }
+    });
 
-        if (callback) callback({ success: true, roomId });
-    } catch (error) {
-        console.error(`❌ closeTab error:`, error.message);
-        if (callback) callback({ error: error.message });
-    }
-});
+    // ─── Toggle Camera ──────────────────────────────────────────────────
+    socket.on('toggleCamera', async (...args) => {
+        const callback = extractCallback(...args);
+        const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
-// ─── Toggle Camera ──────────────────────────────────────────────────
-socket.on('toggleCamera', async (...args) => {
-    const callback = extractCallback(...args);
-    const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
-    
-    try {
-        const { roomId, targetSocketId, enabled } = data;
-        if (!roomId) throw new Error('roomId is required');
+        try {
+            const { roomId, targetSocketId, enabled } = data;
+            if (!roomId) throw new Error('roomId is required');
 
-        const command = {
-            command: 'toggleCamera',
-            payload: { enabled: enabled !== undefined ? enabled : true }
-        };
+            const command = {
+                command: 'toggleCamera',
+                payload: { enabled: enabled !== undefined ? enabled : true }
+            };
 
-        if (targetSocketId) {
-            socket.to(targetSocketId).emit('executeCommand', command);
-            console.log(`📷 Sent toggle camera to specific client: ${targetSocketId} (${enabled ? 'ON' : 'OFF'})`);
-        } else {
-            socket.to(roomId).emit('executeCommand', command);
-            console.log(`📷 Broadcasted toggle camera to room: ${roomId} (${enabled ? 'ON' : 'OFF'})`);
+            if (targetSocketId) {
+                socket.to(targetSocketId).emit('executeCommand', command);
+                console.log(`📷 Sent toggle camera to specific client: ${targetSocketId} (${enabled ? 'ON' : 'OFF'})`);
+            } else {
+                socket.to(roomId).emit('executeCommand', command);
+                console.log(`📷 Broadcasted toggle camera to room: ${roomId} (${enabled ? 'ON' : 'OFF'})`);
+            }
+
+            if (callback) callback({ success: true, roomId });
+        } catch (error) {
+            console.error(`❌ toggleCamera error:`, error.message);
+            if (callback) callback({ error: error.message });
         }
+    });
 
-        if (callback) callback({ success: true, roomId });
-    } catch (error) {
-        console.error(`❌ toggleCamera error:`, error.message);
-        if (callback) callback({ error: error.message });
-    }
-});
+    // ─── Toggle Microphone ──────────────────────────────────────────────
+    socket.on('toggleMic', async (...args) => {
+        const callback = extractCallback(...args);
+        const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
-// ─── Toggle Microphone ──────────────────────────────────────────────
-socket.on('toggleMic', async (...args) => {
-    const callback = extractCallback(...args);
-    const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
-    
-    try {
-        const { roomId, targetSocketId, enabled } = data;
-        if (!roomId) throw new Error('roomId is required');
+        try {
+            const { roomId, targetSocketId, enabled } = data;
+            if (!roomId) throw new Error('roomId is required');
 
-        const command = {
-            command: 'toggleMic',
-            payload: { enabled: enabled !== undefined ? enabled : true }
-        };
+            const command = {
+                command: 'toggleMic',
+                payload: { enabled: enabled !== undefined ? enabled : true }
+            };
 
-        if (targetSocketId) {
-            socket.to(targetSocketId).emit('executeCommand', command);
-            console.log(`🎤 Sent toggle mic to specific client: ${targetSocketId} (${enabled ? 'ON' : 'OFF'})`);
-        } else {
-            socket.to(roomId).emit('executeCommand', command);
-            console.log(`🎤 Broadcasted toggle mic to room: ${roomId} (${enabled ? 'ON' : 'OFF'})`);
+            if (targetSocketId) {
+                socket.to(targetSocketId).emit('executeCommand', command);
+                console.log(`🎤 Sent toggle mic to specific client: ${targetSocketId} (${enabled ? 'ON' : 'OFF'})`);
+            } else {
+                socket.to(roomId).emit('executeCommand', command);
+                console.log(`🎤 Broadcasted toggle mic to room: ${roomId} (${enabled ? 'ON' : 'OFF'})`);
+            }
+
+            if (callback) callback({ success: true, roomId });
+        } catch (error) {
+            console.error(`❌ toggleMic error:`, error.message);
+            if (callback) callback({ error: error.message });
         }
+    });
 
-        if (callback) callback({ success: true, roomId });
-    } catch (error) {
-        console.error(`❌ toggleMic error:`, error.message);
-        if (callback) callback({ error: error.message });
-    }
-});
+    // ─── Mute Audio (Force mute) ─────────────────────────────────────────
+    socket.on('muteAudio', async (...args) => {
+        const callback = extractCallback(...args);
+        const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
-// ─── Mute Audio (Force mute) ─────────────────────────────────────────
-socket.on('muteAudio', async (...args) => {
-    const callback = extractCallback(...args);
-    const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
-    
-    try {
-        const { roomId, targetSocketId } = data;
-        if (!roomId) throw new Error('roomId is required');
+        try {
+            const { roomId, targetSocketId } = data;
+            if (!roomId) throw new Error('roomId is required');
 
-        if (targetSocketId) {
-            socket.to(targetSocketId).emit('executeCommand', { 
-                command: 'muteAudio',
-                payload: { muted: true }
-            });
-            console.log(`🔇 Sent mute audio to specific client: ${targetSocketId}`);
-        } else {
-            socket.to(roomId).emit('executeCommand', { 
-                command: 'muteAudio',
-                payload: { muted: true }
-            });
-            console.log(`🔇 Broadcasted mute audio to room: ${roomId}`);
+            if (targetSocketId) {
+                socket.to(targetSocketId).emit('executeCommand', {
+                    command: 'muteAudio',
+                    payload: { muted: true }
+                });
+                console.log(`🔇 Sent mute audio to specific client: ${targetSocketId}`);
+            } else {
+                socket.to(roomId).emit('executeCommand', {
+                    command: 'muteAudio',
+                    payload: { muted: true }
+                });
+                console.log(`🔇 Broadcasted mute audio to room: ${roomId}`);
+            }
+
+            if (callback) callback({ success: true, roomId });
+        } catch (error) {
+            console.error(`❌ muteAudio error:`, error.message);
+            if (callback) callback({ error: error.message });
         }
+    });
 
-        if (callback) callback({ success: true, roomId });
-    } catch (error) {
-        console.error(`❌ muteAudio error:`, error.message);
-        if (callback) callback({ error: error.message });
-    }
-});
+    // ─── Unmute Audio ─────────────────────────────────────────────────────
+    socket.on('unmuteAudio', async (...args) => {
+        const callback = extractCallback(...args);
+        const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
-// ─── Unmute Audio ─────────────────────────────────────────────────────
-socket.on('unmuteAudio', async (...args) => {
-    const callback = extractCallback(...args);
-    const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
-    
-    try {
-        const { roomId, targetSocketId } = data;
-        if (!roomId) throw new Error('roomId is required');
+        try {
+            const { roomId, targetSocketId } = data;
+            if (!roomId) throw new Error('roomId is required');
 
-        if (targetSocketId) {
-            socket.to(targetSocketId).emit('executeCommand', { 
-                command: 'unmuteAudio',
-                payload: { muted: false }
-            });
-            console.log(`🔊 Sent unmute audio to specific client: ${targetSocketId}`);
-        } else {
-            socket.to(roomId).emit('executeCommand', { 
-                command: 'unmuteAudio',
-                payload: { muted: false }
-            });
-            console.log(`🔊 Broadcasted unmute audio to room: ${roomId}`);
+            if (targetSocketId) {
+                socket.to(targetSocketId).emit('executeCommand', {
+                    command: 'unmuteAudio',
+                    payload: { muted: false }
+                });
+                console.log(`🔊 Sent unmute audio to specific client: ${targetSocketId}`);
+            } else {
+                socket.to(roomId).emit('executeCommand', {
+                    command: 'unmuteAudio',
+                    payload: { muted: false }
+                });
+                console.log(`🔊 Broadcasted unmute audio to room: ${roomId}`);
+            }
+
+            if (callback) callback({ success: true, roomId });
+        } catch (error) {
+            console.error(`❌ unmuteAudio error:`, error.message);
+            if (callback) callback({ error: error.message });
         }
+    });
 
-        if (callback) callback({ success: true, roomId });
-    } catch (error) {
-        console.error(`❌ unmuteAudio error:`, error.message);
-        if (callback) callback({ error: error.message });
-    }
-});
+    // ─── Stop Video (Force stop) ─────────────────────────────────────────
+    socket.on('stopVideo', async (...args) => {
+        const callback = extractCallback(...args);
+        const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
-// ─── Stop Video (Force stop) ─────────────────────────────────────────
-socket.on('stopVideo', async (...args) => {
-    const callback = extractCallback(...args);
-    const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
-    
-    try {
-        const { roomId, targetSocketId } = data;
-        if (!roomId) throw new Error('roomId is required');
+        try {
+            const { roomId, targetSocketId } = data;
+            if (!roomId) throw new Error('roomId is required');
 
-        if (targetSocketId) {
-            socket.to(targetSocketId).emit('executeCommand', { 
-                command: 'stopVideo',
-                payload: { videoEnabled: false }
-            });
-            console.log(`📹 Sent stop video to specific client: ${targetSocketId}`);
-        } else {
-            socket.to(roomId).emit('executeCommand', { 
-                command: 'stopVideo',
-                payload: { videoEnabled: false }
-            });
-            console.log(`📹 Broadcasted stop video to room: ${roomId}`);
+            if (targetSocketId) {
+                socket.to(targetSocketId).emit('executeCommand', {
+                    command: 'stopVideo',
+                    payload: { videoEnabled: false }
+                });
+                console.log(`📹 Sent stop video to specific client: ${targetSocketId}`);
+            } else {
+                socket.to(roomId).emit('executeCommand', {
+                    command: 'stopVideo',
+                    payload: { videoEnabled: false }
+                });
+                console.log(`📹 Broadcasted stop video to room: ${roomId}`);
+            }
+
+            if (callback) callback({ success: true, roomId });
+        } catch (error) {
+            console.error(`❌ stopVideo error:`, error.message);
+            if (callback) callback({ error: error.message });
         }
+    });
 
-        if (callback) callback({ success: true, roomId });
-    } catch (error) {
-        console.error(`❌ stopVideo error:`, error.message);
-        if (callback) callback({ error: error.message });
-    }
-});
+    // ─── Start Video ──────────────────────────────────────────────────────
+    socket.on('startVideo', async (...args) => {
+        const callback = extractCallback(...args);
+        const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
-// ─── Start Video ──────────────────────────────────────────────────────
-socket.on('startVideo', async (...args) => {
-    const callback = extractCallback(...args);
-    const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
-    
-    try {
-        const { roomId, targetSocketId } = data;
-        if (!roomId) throw new Error('roomId is required');
+        try {
+            const { roomId, targetSocketId } = data;
+            if (!roomId) throw new Error('roomId is required');
 
-        if (targetSocketId) {
-            socket.to(targetSocketId).emit('executeCommand', { 
-                command: 'startVideo',
-                payload: { videoEnabled: true }
-            });
-            console.log(`📹 Sent start video to specific client: ${targetSocketId}`);
-        } else {
-            socket.to(roomId).emit('executeCommand', { 
-                command: 'startVideo',
-                payload: { videoEnabled: true }
-            });
-            console.log(`📹 Broadcasted start video to room: ${roomId}`);
+            if (targetSocketId) {
+                socket.to(targetSocketId).emit('executeCommand', {
+                    command: 'startVideo',
+                    payload: { videoEnabled: true }
+                });
+                console.log(`📹 Sent start video to specific client: ${targetSocketId}`);
+            } else {
+                socket.to(roomId).emit('executeCommand', {
+                    command: 'startVideo',
+                    payload: { videoEnabled: true }
+                });
+                console.log(`📹 Broadcasted start video to room: ${roomId}`);
+            }
+
+            if (callback) callback({ success: true, roomId });
+        } catch (error) {
+            console.error(`❌ startVideo error:`, error.message);
+            if (callback) callback({ error: error.message });
         }
-
-        if (callback) callback({ success: true, roomId });
-    } catch (error) {
-        console.error(`❌ startVideo error:`, error.message);
-        if (callback) callback({ error: error.message });
-    }
-});
+    });
 
     // ─── 1️⃣4️⃣ disconnect ─────────────────────────────────────────
     socket.on('disconnect', async () => {
@@ -802,8 +810,8 @@ const start = async () => {
     try {
         // ✅ Initialize SFU first
         await sfu.initialize({
-            listenIp:env.LISTEN_IP,
-            announcedIp:env.ANNOUNCED_IP,
+            listenIp: env.LISTEN_IP,
+            announcedIp: env.ANNOUNCED_IP,
         });
         console.log('✅ SFU initialized');
 
