@@ -67,7 +67,9 @@ const SfuTestPage = (_props: Props) => {
 
           const myId = wsRef.current.id;
           if (myId && producersList) {
-            const amIProducing = producersList.some((p: any) => p.socketId === myId);
+            const amIProducing = producersList.some((p: any) => 
+              p.socketId === myId || producers.some(localP => localP.id === p.id || localP.id === p.producerId)
+            );
             // If we have local producers but the server says we don't, we were kicked
             if (!amIProducing && producers.length > 0) {
               console.warn('⚠️ Polling detected our producer was dropped! Reconnecting...');
@@ -83,7 +85,7 @@ const SfuTestPage = (_props: Props) => {
       }, 10000);
     }
     return () => clearInterval(interval);
-  }, [isCallActive, wsConnected, producers.length]);
+  }, [isCallActive, wsConnected, producers]);
 
   // ─── Get RTP Capabilities ──────────────────────────────
   const getRtpCap = useCallback(async () => {
@@ -111,11 +113,12 @@ const SfuTestPage = (_props: Props) => {
       if (!wsRef.current || !wsRef.current.isConnected) return null;
       try {
         const res = await wsRef.current.createSendTransport(targetRoomId);
-        if (res && !res.error) return res;
+        if (res && !(res as any).error) return res;
+        throw new Error((res as any)?.error || 'Failed to create send transport');
       } catch (error) {
         console.warn('⚠️ Create Send Transport failed:', error);
+        throw error;
       }
-      return null;
     },
     []
   );
@@ -263,17 +266,28 @@ const SfuTestPage = (_props: Props) => {
         }
       });
 
-      const media = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-      });
+      const storedVideo = localStorage.getItem('sfuClientVideoEnabled');
+      const isVideoEnabled = storedVideo === null ? true : storedVideo === 'true';
+      const storedAudio = localStorage.getItem('sfuClientAudioEnabled');
+      const isAudioEnabled = storedAudio === null ? true : storedAudio === 'true';
 
-      const videoTrack = media.getVideoTracks()[0];
-      const audioTrack = media.getAudioTracks()[0];
+      const constraints: any = {};
+      if (isVideoEnabled) constraints.video = { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' };
+      if (isAudioEnabled) constraints.audio = true;
 
-      if (!media || (!audioTrack && !videoTrack)) throw new Error('No media devices available');
+      let media: MediaStream | null = null;
+      if (constraints.audio || constraints.video) {
+        try {
+          media = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (err) {
+          console.warn('⚠️ Media devices failed to start or permissions denied', err);
+        }
+      }
 
-      setLocalStream(media);
+      const videoTrack = media?.getVideoTracks()[0];
+      const audioTrack = media?.getAudioTracks()[0];
+
+      if (media) setLocalStream(media);
 
       const createdProducers: any[] = [];
       if (audioTrack) {
@@ -302,6 +316,14 @@ const SfuTestPage = (_props: Props) => {
     } catch (err: any) {
       console.error(`❌ Error: ${err.message}`);
       await leaveCall(false);
+
+      if (err.message?.toLowerCase().includes('router for room') || err.message?.toLowerCase().includes('not found')) {
+        console.warn('Room missing on server. Stopping auto-reconnect.');
+        localStorage.removeItem('sfuClientRoom');
+        setRoomId('');
+        return;
+      }
+
       // Auto-retry if a room is saved
       const savedRoom = localStorage.getItem('sfuClientRoom');
       if (savedRoom) {
@@ -325,9 +347,12 @@ const SfuTestPage = (_props: Props) => {
   useEffect(() => {
     const handleHardware = async (kind: 'video' | 'audio', enable: boolean) => {
       const prodObj = producers.find(p => p.producer && p.producer.kind === kind);
-      const producer = prodObj?.producer;
+      let producer = prodObj?.producer;
 
       if (enable) {
+        if (kind === 'video') localStorage.setItem('sfuClientVideoEnabled', 'true');
+        if (kind === 'audio') localStorage.setItem('sfuClientAudioEnabled', 'true');
+
         // TURN ON: Request new hardware access
         try {
           const constraints = kind === 'video'
@@ -336,9 +361,22 @@ const SfuTestPage = (_props: Props) => {
           const stream = await navigator.mediaDevices.getUserMedia(constraints);
           const newTrack = kind === 'video' ? stream.getVideoTracks()[0] : stream.getAudioTracks()[0];
 
-          if (newTrack && producer) {
-            await producer.replaceTrack({ track: newTrack });
-            producer.resume();
+          if (newTrack) {
+            if (producer) {
+              await producer.replaceTrack({ track: newTrack });
+              producer.resume();
+            } else if (sendTransport) {
+              // Create a new producer dynamically if it didn't exist
+              const newProducer = await sendTransport.produce({
+                track: newTrack,
+                encodings: kind === 'video' 
+                  ? [{ maxBitrate: 100000 }, { maxBitrate: 300000 }, { maxBitrate: 900000 }]
+                  : [{ maxBitrate: 64000 }],
+                codecOptions: kind === 'audio' ? { opusStereo: true, opusFec: true, opusDtx: true } : undefined,
+              });
+              setProducers(prev => [...prev, { id: newProducer.id, kind, producer: newProducer }]);
+              producer = newProducer;
+            }
 
             // Update localStream
             if (localStream) {
@@ -348,12 +386,17 @@ const SfuTestPage = (_props: Props) => {
                 localStream.removeTrack(oldTrack);
               }
               localStream.addTrack(newTrack);
+            } else {
+              setLocalStream(stream);
             }
           }
         } catch (err) {
           console.error(`Failed to start ${kind} hardware:`, err);
         }
       } else {
+        if (kind === 'video') localStorage.setItem('sfuClientVideoEnabled', 'false');
+        if (kind === 'audio') localStorage.setItem('sfuClientAudioEnabled', 'false');
+
         // TURN OFF: Physically kill hardware
         if (producer) {
           producer.pause();
@@ -376,12 +419,14 @@ const SfuTestPage = (_props: Props) => {
       leaveCall,
       toggleCamera: (enabled?: boolean) => {
         const prod = producers.find(p => p.producer && p.producer.kind === 'video')?.producer;
-        const targetState = enabled !== undefined ? enabled : prod?.paused;
+        const isCurrentlyOff = prod ? prod.paused : true;
+        const targetState = enabled !== undefined ? enabled : isCurrentlyOff;
         handleHardware('video', !!targetState);
       },
       toggleMic: (enabled?: boolean) => {
         const prod = producers.find(p => p.producer && p.producer.kind === 'audio')?.producer;
-        const targetState = enabled !== undefined ? enabled : prod?.paused;
+        const isCurrentlyOff = prod ? prod.paused : true;
+        const targetState = enabled !== undefined ? enabled : isCurrentlyOff;
         handleHardware('audio', !!targetState);
       },
       muteAudio: () => handleHardware('audio', false),
@@ -389,7 +434,7 @@ const SfuTestPage = (_props: Props) => {
       stopVideo: () => handleHardware('video', false),
       startVideo: () => handleHardware('video', true)
     };
-  }, [establishDevice, leaveCall, localStream, producers]);
+  }, [establishDevice, leaveCall, localStream, producers, sendTransport]);
 
   // ─── WebSocket Connection ──────────────────────────────
   const makeWsConn = useCallback(async () => {
@@ -427,13 +472,12 @@ const SfuTestPage = (_props: Props) => {
       // If server force closes a producer (drop call remotely), interpret as end call
       ws.on('producerClosed', (data: any) => {
         console.warn('⚠️ Server force-closed producer:', data.producerId);
-        // Force a websocket reset to clear backend transport limits and trigger auto-reconnect
-        if (wsRef.current) {
-          wsRef.current.disconnect();
-          setTimeout(() => {
-            if (wsRef.current) wsRef.current.connect();
-          }, 1500);
-        }
+        
+        // We must only disconnect if it's OUR producer being closed
+        // Because ws.on handlers might not have the latest producers closure, 
+        // we can check local storage or let the polling mechanism handle the drop.
+        // Actually, since producers is empty in the closure, we shouldn't indiscriminately disconnect.
+        // The polling loop above will catch if we were kicked out.
       });
 
       // ─── Remote Commands from Admin ──────────────────────────
