@@ -22,6 +22,22 @@ import { WebSocketClient } from '@/utils/websocket';
 import { Device } from 'mediasoup-client';
 import { ToastMsgs } from '@/api/toastUtils';
 
+const getIceServers = () => {
+  try {
+    if (import.meta.env.VITE_ICE_SERVERS) {
+      console.log("got local ice ")
+      return JSON.parse(import.meta.env.VITE_ICE_SERVERS);
+    }
+  } catch (e) {
+    console.error('Failed to parse VITE_ICE_SERVERS env variable', e);
+  }
+  return [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' }
+  ];
+};
+
 // ─── Video Modal Component ──────────────────────────────────
 interface VideoModalProps {
   isOpen: boolean;
@@ -733,11 +749,7 @@ const SfuTest = (): JSX.Element => {
           iceCandidates: recvTransportData.iceCandidates,
           dtlsParameters: recvTransportData.dtlsParameters,
           sctpParameters: recvTransportData.sctpParameters,
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' }
-          ]
+          iceServers: getIceServers()
         });
 
         // ─── 5️⃣ Connect RECV Transport ──────────────────────

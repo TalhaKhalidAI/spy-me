@@ -4,6 +4,21 @@ import { WebSocketClient } from '../../utils/websocket';
 import { Device } from 'mediasoup-client';
 import { ToastMsgs } from '@/api/toastUtils';
 
+const getIceServers = () => {
+  try {
+    if (import.meta.env.VITE_ICE_SERVERS) {
+      return JSON.parse(import.meta.env.VITE_ICE_SERVERS);
+    }
+  } catch (e) {
+    console.error('Failed to parse VITE_ICE_SERVERS env variable', e);
+  }
+  return [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' }
+  ];
+};
+
 interface Props { }
 
 const SfuTestPage = (_props: Props) => {
@@ -243,11 +258,7 @@ const SfuTestPage = (_props: Props) => {
         iceCandidates: transportData.iceCandidates,
         dtlsParameters: transportData.dtlsParameters,
         sctpParameters: transportData.sctpParameters,
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
-        ]
+        iceServers: getIceServers()
       });
 
       sendTransportObj.on('connect', ({ dtlsParameters }, callback, errback) => {
