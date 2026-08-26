@@ -595,7 +595,7 @@ const Table = <T extends Record<string, any>>({
                     className={getRowClasses(row, isSelected)}
                   >
                     {hasCheckbox && (
-                      <td className="text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="text-center md:table-cell" data-label="Select" onClick={(e) => e.stopPropagation()}>
                         <ThemeAwareCheckbox
                           checked={isSelected}
                           disabled={isDisabled}
@@ -605,13 +605,13 @@ const Table = <T extends Record<string, any>>({
                     )}
 
                     {showRowNumbers && (
-                      <td className={`text-center text-base-content/40 font-mono text-xs ${getCellClasses()}`}>
+                      <td className={`text-center text-base-content/40 font-mono text-xs ${getCellClasses()}`} data-label="#">
                         {globalIndex + 1}
                       </td>
                     )}
 
                     {columns.map((col) => (
-                      <td key={col.key} className={getCellClasses()}>
+                      <td key={col.key} className={getCellClasses()} data-label={col.label}>
                         {col.render
                           ? col.render(row[col.key], row)
                           : row[col.key] ?? '-'}
@@ -619,7 +619,7 @@ const Table = <T extends Record<string, any>>({
                     ))}
 
                     {hasActions && (
-                      <td className={`text-center ${getCellClasses()}`}>
+                      <td className={`text-center ${getCellClasses()}`} data-label="Actions">
                         {renderActionButtons(row, globalIndex)}
                       </td>
                     )}

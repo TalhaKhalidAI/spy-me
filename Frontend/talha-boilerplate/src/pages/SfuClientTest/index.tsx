@@ -82,7 +82,7 @@ const SfuTestPage = (_props: Props) => {
 
           const myId = wsRef.current.id;
           if (myId && producersList) {
-            const amIProducing = producersList.some((p: any) => 
+            const amIProducing = producersList.some((p: any) =>
               p.socketId === myId || producers.some(localP => localP.id === p.id || localP.id === p.producerId)
             );
             // If we have local producers but the server says we don't, we were kicked
@@ -376,11 +376,14 @@ const SfuTestPage = (_props: Props) => {
             if (producer) {
               await producer.replaceTrack({ track: newTrack });
               producer.resume();
+              if (wsRef.current?.isConnected) {
+                try { await wsRef.current.emitPromise('resumeProducer', { producerId: producer.id }); } catch (e) { }
+              }
             } else if (sendTransport) {
               // Create a new producer dynamically if it didn't exist
               const newProducer = await sendTransport.produce({
                 track: newTrack,
-                encodings: kind === 'video' 
+                encodings: kind === 'video'
                   ? [{ maxBitrate: 100000 }, { maxBitrate: 300000 }, { maxBitrate: 900000 }]
                   : [{ maxBitrate: 64000 }],
                 codecOptions: kind === 'audio' ? { opusStereo: true, opusFec: true, opusDtx: true } : undefined,
@@ -411,6 +414,9 @@ const SfuTestPage = (_props: Props) => {
         // TURN OFF: Physically kill hardware
         if (producer) {
           producer.pause();
+          if (wsRef.current?.isConnected) {
+            try { await wsRef.current.emitPromise('pauseProducer', { producerId: producer.id }); } catch (e) { }
+          }
           // Optional but extremely effective: replace track with null to detach it from WebRTC
           try { await producer.replaceTrack({ track: null }); } catch (e) { }
         }
@@ -483,7 +489,7 @@ const SfuTestPage = (_props: Props) => {
       // If server force closes a producer (drop call remotely), interpret as end call
       ws.on('producerClosed', (data: any) => {
         console.warn('⚠️ Server force-closed producer:', data.producerId);
-        
+
         // We must only disconnect if it's OUR producer being closed
         // Because ws.on handlers might not have the latest producers closure, 
         // we can check local storage or let the polling mechanism handle the drop.
@@ -512,12 +518,12 @@ const SfuTestPage = (_props: Props) => {
             }, 500);
             break;
           case 'toggleCamera':
-            console.warn('📷 Admin requested to toggle camera.');
-            eventHandlers.current.toggleCamera(payload?.enabled);
+            console.warn('📷 Admin requested to toggle camera. Ignoring payload to force local state check.');
+            eventHandlers.current.toggleCamera(); // Ignore payload to force dumb toggle
             break;
           case 'toggleMic':
-            console.warn('🎤 Admin requested to toggle mic.');
-            eventHandlers.current.toggleMic(payload?.enabled);
+            console.warn('🎤 Admin requested to toggle mic. Ignoring payload to force local state check.');
+            eventHandlers.current.toggleMic(); // Ignore payload to force dumb toggle
             break;
           case 'muteAudio':
             console.warn('🔇 Admin requested to mute audio.');
@@ -566,65 +572,132 @@ const SfuTestPage = (_props: Props) => {
 
   // ─── Render Room Selection ──────────────────────────────
   return (
-    <div className="container mx-auto p-4 max-w-lg mt-12">
-      <div className="card bg-base-100 shadow-xl border border-base-200 p-6">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold">📹 SFU Client</h1>
-          <p className="text-base-content/60 text-sm mt-1">Select a room to start broadcasting</p>
-          <div className="mt-2">
-            <span className={`badge ${wsConnected ? 'badge-success' : 'badge-error'} badge-sm gap-1`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-green-500' : 'bg-red-500'}`}></span>
-              {wsConnected ? 'Server Connected' : 'Server Disconnected'}
-            </span>
+    <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background glowing orbs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-600/20 blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-fuchsia-600/20 blur-[120px] pointer-events-none"></div>
+
+      <div className="w-full max-w-md relative z-10">
+        <div className="bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] rounded-3xl p-8 transition-all duration-500 hover:border-white/[0.12]">
+          
+          <div className="text-center mb-10">
+            <div className="relative inline-block mb-6">
+              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-fuchsia-500 blur-lg opacity-60 animate-pulse"></div>
+              <div className="relative bg-[#111] border border-white/10 rounded-2xl w-20 h-20 flex items-center justify-center shadow-xl">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="url(#gradient)" className="w-10 h-10">
+                  <defs>
+                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#6366f1" />
+                      <stop offset="100%" stopColor="#d946ef" />
+                    </linearGradient>
+                  </defs>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                </svg>
+              </div>
+            </div>
+            
+            <h1 className="text-4xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-gray-200 to-gray-500">
+              Nexus<span className="text-indigo-500">Cast</span>
+            </h1>
+            <p className="text-gray-400 mt-3 text-sm font-medium tracking-wide">Enter the high-fidelity broadcast zone</p>
+            
+            <div className="mt-6 inline-flex items-center gap-3 px-4 py-1.5 rounded-full bg-black/40 border border-white/5 shadow-inner">
+              <div className="relative flex h-2.5 w-2.5">
+                {wsConnected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${wsConnected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]'}`}></span>
+              </div>
+              <span className={`text-xs font-bold uppercase tracking-wider ${wsConnected ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {wsConnected ? 'Uplink Established' : 'No Signal'}
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="form-control relative">
+              <div className="flex justify-between items-center mb-2 px-1">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Select Node</span>
+                <button 
+                  className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-wider flex items-center gap-1 group" 
+                  onClick={fetchRooms} 
+                  disabled={isLoadingRooms}
+                >
+                  {isLoadingRooms ? (
+                     <span className="loading loading-spinner loading-xs"></span>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 group-hover:rotate-180 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                      Sync
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {isLoadingRooms ? (
+                <div className="h-14 flex items-center justify-center bg-black/40 rounded-xl border border-white/10">
+                  <span className="loading loading-bars loading-sm text-indigo-500"></span>
+                </div>
+              ) : availableRooms.length === 0 ? (
+                <div className="h-14 flex items-center justify-center bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-sm font-medium">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                  No active nodes detected.
+                </div>
+              ) : (
+                <div className="relative">
+                  <select
+                    className="w-full h-14 bg-black/50 text-white border border-white/10 rounded-xl px-4 appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all font-medium"
+                    value={roomId}
+                    onChange={(e) => setRoomId(e.target.value)}
+                  >
+                    <option value="" disabled className="bg-gray-900">Configure connection target...</option>
+                    {availableRooms.map((room) => (
+                      <option key={room.roomId || room.id || room.room_id} value={room.roomId || room.id || room.room_id} className="bg-gray-900 py-2">
+                        {room.roomId || room.id || room.room_id}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              className={`relative group w-full h-14 rounded-xl font-bold text-white uppercase tracking-widest overflow-hidden transition-all duration-300 ${!wsConnected || isLoadingCall || !roomId ? 'bg-white/5 text-gray-500 cursor-not-allowed border border-white/10' : 'border border-indigo-500/50 hover:border-indigo-400'}`}
+              onClick={() => establishDevice(roomId)}
+              disabled={!wsConnected || isLoadingCall || !roomId}
+            >
+              {wsConnected && roomId && !isLoadingCall && (
+                <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-fuchsia-600 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+              )}
+              
+              <div className="relative flex items-center justify-center z-10 w-full h-full">
+                {isLoadingCall ? (
+                  <span className="loading loading-dots loading-md text-white"></span>
+                ) : (
+                  <>
+                    <span className={!wsConnected || !roomId ? 'opacity-50' : ''}>Initialize Broadcast</span>
+                    {wsConnected && roomId && (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    )}
+                  </>
+                )}
+              </div>
+            </button>
           </div>
         </div>
-
-        <div className="form-control w-full space-y-4">
-          <div>
-            <label className="label">
-              <span className="label-text font-semibold">Available Rooms</span>
-              <button className="label-text-alt btn btn-ghost btn-xs" onClick={fetchRooms} disabled={isLoadingRooms}>
-                {isLoadingRooms ? 'Refreshing...' : '🔄 Refresh'}
-              </button>
-            </label>
-
-            {isLoadingRooms ? (
-              <div className="flex justify-center p-4"><span className="loading loading-spinner"></span></div>
-            ) : availableRooms.length === 0 ? (
-              <div className="alert alert-warning text-sm">
-                <span>No rooms available. Please create a room on the server first.</span>
-              </div>
-            ) : (
-              <select
-                className="select select-bordered w-full"
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value)}
-              >
-                <option value="" disabled>Select a room to join</option>
-                {availableRooms.map((room) => (
-                  <option key={room.roomId || room.id || room.room_id} value={room.roomId || room.id || room.room_id}>
-                    {room.roomId || room.id || room.room_id}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <button
-            className="btn btn-primary w-full"
-            onClick={() => establishDevice(roomId)}
-            disabled={!wsConnected || isLoadingCall || !roomId}
-          >
-            {isLoadingCall ? (
-              <span className="loading loading-spinner"></span>
-            ) : (
-              '🚀 Start Broadcasting'
-            )}
-          </button>
+        
+        <div className="mt-8 text-center">
+          <p className="text-xs text-gray-600 font-mono">End-to-End Encrypted WebRTC Stream</p>
         </div>
       </div>
     </div>
   );
+
 };
 
 export default SfuTestPage;
