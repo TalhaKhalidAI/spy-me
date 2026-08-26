@@ -19,8 +19,8 @@ const options = {
         },
         servers: [
             {
-                url: `http://localhost:${env.PORT}/api`,
-                description: 'Development server',
+                url: '/api',
+                description: 'Current environment server',
             },
         ],
         components: {

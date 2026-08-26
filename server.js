@@ -111,18 +111,27 @@ app.use((req, res, next) => {
 
 // ─── Rate Limiting ───────────────────────────────────────────────────────────
 const limiter = rateLimit({
-    windowMs: env.RATE_LIMIT_WINDOW_MS || 900000,
-    max: env.RATE_LIMIT_MAX || 100,
+    windowMs: env.RATE_LIMIT_WINDOW_MS || 60000, // 1 minute
+    max: env.RATE_LIMIT_MAX || 10000, // 10000 requests per minute
 
     standardHeaders: true,
     legacyHeaders: false,
-    message: { status: 'fail', message: 'Too many requests, please try again after 15 minutes.' },
+    message: { status: 'fail', message: 'Too many requests, please try again later.' },
 });
-app.use('/api', limiter);
+if (env.RATE_LIMIT_ENABLED) {
+    app.use('/api', limiter);
+}
+
 
 // ─── Core Middleware ─────────────────────────────────────────────────────────
 app.use(helmet());
-app.use(cors({ origin: env.CORS_ORIGIN || '*', credentials: true }));
+let corsOptions = { credentials: true };
+if (env.CORS_ORIGIN && env.CORS_ORIGIN !== '*') {
+    corsOptions.origin = env.CORS_ORIGIN.split(',').map(o => o.trim());
+} else {
+    corsOptions.origin = true; // Reflect request origin to allow credentials for any domain
+}
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 app.use(cookieParser());
@@ -468,25 +477,25 @@ io.on('connection', (socket) => {
     });
 
     // ─── 1️⃣0️⃣ resumeConsumer ──────────────────────────────────────
-socket.on('resumeConsumer', async (...args) => {
-    const callback = extractCallback(...args);
-    const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
-    try {
-        await sfu.resumeConsumer(data.consumerId);
+    socket.on('resumeConsumer', async (...args) => {
+        const callback = extractCallback(...args);
+        const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
+        try {
+            await sfu.resumeConsumer(data.consumerId);
 
-        // ✅ Fetch the real consumer, then request keyframe
-        const consumer = sfu.consumerManager.getConsumer(data.consumerId);
-        if (consumer && consumer.kind === 'video') {
-            await consumer.requestKeyFrame();
+            // ✅ Fetch the real consumer, then request keyframe
+            const consumer = sfu.consumerManager.getConsumer(data.consumerId);
+            if (consumer && consumer.kind === 'video') {
+                await consumer.requestKeyFrame();
+            }
+
+            if (callback) callback({ success: true });
+            console.log(`▶️ Consumer resumed: ${data.consumerId}`);
+        } catch (error) {
+            console.error(`❌ resumeConsumer error:`, error.message);
+            if (callback) callback({ error: error.message });
         }
-
-        if (callback) callback({ success: true });
-        console.log(`▶️ Consumer resumed: ${data.consumerId}`);
-    } catch (error) {
-        console.error(`❌ resumeConsumer error:`, error.message);
-        if (callback) callback({ error: error.message });
-    }
-});
+    });
 
     // ─── 1️⃣1️⃣ closeProducer ──────────────────────────────────────
     socket.on('closeProducer', async (...args) => {
@@ -819,14 +828,15 @@ const start = async () => {
         const protocol = isHttpsServer ? 'https' : 'http';
         const wsProtocol = isHttpsServer ? 'wss' : 'ws';
 
-        server.listen(PORT, () => {
+        server.listen(PORT, env.LISTEN_IP || '0.0.0.0', () => {
+            const displayHost = env.LISTEN_IP === '0.0.0.0' ? (env.ANNOUNCED_IP || 'localhost') : env.LISTEN_IP;
             const banner = [
                 '═══════════════════════════════════════════════════════',
                 `🚀 Server running in ${env.NODE_ENV} mode on port ${PORT} (${protocol.toUpperCase()})`,
-                `🔗 API:       ${protocol}://localhost:${PORT}/api/v1`,
-                `📚 Docs:      ${protocol}://localhost:${PORT}/api-docs`,
-                `💚 Health:    ${protocol}://localhost:${PORT}/health`,
-                `📡 WebSocket: ${wsProtocol}://localhost:${PORT}`,
+                `🔗 API:       ${protocol}://${displayHost}:${PORT}/api/v1`,
+                `📚 Docs:      ${protocol}://${displayHost}:${PORT}/api-docs`,
+                `💚 Health:    ${protocol}://${displayHost}:${PORT}/health`,
+                `📡 WebSocket: ${wsProtocol}://${displayHost}:${PORT}`,
                 '═══════════════════════════════════════════════════════',
             ].join('\n');
 

@@ -11,11 +11,11 @@ const ipRegex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[
 const envSchema = z.object({
   // Environment
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-RATE_LIMIT_MAX: z.coerce.number().min(1).max(10000).default(100),
+  RATE_LIMIT_MAX: z.coerce.number().min(1).max(100000).default(10000),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().min(1000).max(3600000).default(900000),
   // Logger Configuration
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('info'),
-  ENABLE_AUDIT_LOG: z.coerce.boolean().default(false),
+  ENABLE_AUDIT_LOG: z.string().default('false').transform(v => v === 'true' || v === '1'),
   LOG_MAX_SIZE: z.string().default('20m'),
   LOG_MAX_FILES: z.string().default('14d'),
   LOG_ERROR_MAX_FILES: z.string().default('30d'),
@@ -24,7 +24,7 @@ RATE_LIMIT_MAX: z.coerce.number().min(1).max(10000).default(100),
   RTC_MIN_PORT: z.coerce.number().min(1024).max(65535).default(2000),
   RTC_MAX_PORT: z.coerce.number().min(1024).max(65535).default(3000),
   // SSL Configuration
-  HTTPS_ENABLED: z.coerce.boolean().default(true),
+  HTTPS_ENABLED: z.string().default('true').transform(v => v === 'true' || v === '1'),
   SSL_KEY_PATH: z.string().default('./src/certs/status.lab.mli.key'),
   SSL_CERT_PATH: z.string().default('./src/certs/status.lab.mli.crt'),
   // Database Configuration
@@ -32,7 +32,7 @@ RATE_LIMIT_MAX: z.coerce.number().min(1).max(10000).default(100),
   DATABASE_POOL_MAX: z.coerce.number().min(1).max(100).default(20),
   DATABASE_POOL_TIMEOUT: z.coerce.number().min(1).max(60).default(10),
 
-  // Server Configuration
+  // Server Configuration   
   PORT: z.coerce.number().min(1).max(65535).default(3000),
   API_VERSION: z.string().default('v1'),
 
@@ -61,17 +61,20 @@ RATE_LIMIT_MAX: z.coerce.number().min(1).max(10000).default(100),
   STUN_SERVERS: z.string().default('stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302,stun:stun2.l.google.com:19302'),
   TURN_SERVERS: z.string().optional(),
 
-// In envSchema:
-LISTEN_IP: z.string().regex(ipRegex, 'Invalid IP address').default('0.0.0.0'),
-ANNOUNCED_IP: z.string().regex(ipRegex, 'Invalid IP address').default('127.0.0.1'),
+  // In envSchema:
+  LISTEN_IP: z.string().regex(ipRegex, 'Invalid IP address').default('0.0.0.0'),
+  ANNOUNCED_IP: z.string().regex(ipRegex, 'Invalid IP address').default('127.0.0.1'),
+
+  RATE_LIMIT_ENABLED: z.string().default('true').transform(v => v === 'true' || v === '1'),
+
 });
 
 // Parse environment variables
 const parseEnv = () => {
   try {
     const env = envSchema.parse({
-      RATE_LIMIT_MAX:process.env.RATE_LIMIT_MAX,
-      RATE_LIMIT_WINDOW_MS:process.env.RATE_LIMIT_WINDOW_MS,
+      RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX,
+      RATE_LIMIT_WINDOW_MS: process.env.RATE_LIMIT_WINDOW_MS,
       LOG_LEVEL: process.env.LOG_LEVEL,
       RTC_MIN_PORT: process.env.RTC_MIN_PORT || process.env.LOG_MIN_PORT,
       RTC_MAX_PORT: process.env.RTC_MAX_PORT || process.env.LOG_MAX_PORT,
@@ -109,6 +112,8 @@ const parseEnv = () => {
 
       LISTEN_IP: process.env.LISTEN_IP,
       ANNOUNCED_IP: process.env.ANNOUNCED_IP,
+
+      RATE_LIMIT_ENABLED: process.env.RATE_LIMIT_ENABLED,
     });
 
     const stunServersArray = env.STUN_SERVERS
@@ -126,7 +131,7 @@ const parseEnv = () => {
       }
     }
 
-       const iceServers = [];
+    const iceServers = [];
     for (const stunUrl of stunServersArray) {
       iceServers.push({ urls: stunUrl });
     }
