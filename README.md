@@ -32,8 +32,8 @@ A professional, production-ready API boilerplate built with **Express**, **Prism
 
 ### 🛡️ Security
 - **Helmet.js** for secure HTTP headers.
-- CORS pre-configured.
-- Rate limiting (configurable).
+- **Dynamic CORS Support**: Allow all origins safely or restrict via comma-separated list.
+- **Toggleable Rate Limiting**: Easily configure window size and max requests to prevent DDoS.
 - Environment variable validation with **Zod**.
 
 ### 📝 Logging
@@ -74,18 +74,33 @@ npm install
 Copy `.env.example` to `.env` and fill in the values:
 
 ```bash
-# Server
-JWT_SECRET=Your hex key
-JWT_REFRESH_SECRET=secret
-DATABASE_URL="postgresql: "
+# Server Configuration
 PORT=5050
-RTC_MIN_PORT=2000
-RTC_MAX_PORT=3000
-LOG_LEVEL="info"
-MAX_TRANSPORTS_PER_PEER=10
 HTTPS_ENABLED=true
 SSL_KEY_PATH="./src/certs/status.lab.mli.key"
 SSL_CERT_PATH="./src/certs/status.lab.mli.crt"
+
+# Networking & CORS
+LISTEN_IP=0.0.0.0
+ANNOUNCED_IP=192.168.100.185
+CORS_ORIGIN=*
+
+# WebRTC (Mediasoup) Configuration
+RTC_MIN_PORT=2000
+RTC_MAX_PORT=3000
+MAX_TRANSPORTS_PER_PEER=10
+STUN_SERVERS=stun:stun.l.google.com:19302
+
+# Rate Limiting
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_WINDOW_MS=60000
+RATE_LIMIT_MAX=10000
+
+# Auth & Database
+JWT_SECRET=Your_secret_key_here
+JWT_REFRESH_SECRET=Your_refresh_secret_here
+DATABASE_URL="postgresql://user:pass@localhost:5432/sfu_db"
+LOG_LEVEL="info"
 
 ```
 
@@ -108,11 +123,11 @@ npm run db:seed
 npm run dev
 ```
 
-The server will start at:
-- **API:** `http://localhost:3000/api/v1`
-- **Swagger Docs:** `http://localhost:3000/api-docs`
-- **WebSocket (Socket.IO):** `ws://localhost:3000`
-- **Health Check:** `http://localhost:3000/health`
+The server will start and bind to your `LISTEN_IP` (e.g. `0.0.0.0`). The console logs will dynamically show your `ANNOUNCED_IP` or `localhost`:
+- **API:** `http(s)://<ANNOUNCED_IP>:5050/api/v1`
+- **Swagger Docs:** `http(s)://<ANNOUNCED_IP>:5050/api-docs`
+- **WebSocket (Socket.IO):** `ws(s)://<ANNOUNCED_IP>:5050`
+- **Health Check:** `http(s)://<ANNOUNCED_IP>:5050/health`
 
 ---
 
