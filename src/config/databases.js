@@ -16,6 +16,10 @@ class PrismaManager {
   }
 
   async getClient() {
+    if (env.DATABASE_ENABLED === false) {
+      logger.info('Database is disabled in environment variables. Skipping connection.');
+      return null;
+    }
     if (this.prisma) return this.prisma;
 
     try {
@@ -121,6 +125,13 @@ class PrismaManager {
 
   async healthCheck() {
     try {
+      if (env.DATABASE_ENABLED === false) {
+        return {
+          status: 'disabled',
+          timestamp: new Date().toISOString(),
+        };
+      }
+
       if (!this.prisma) {
         await this.getClient();
       }
@@ -147,12 +158,14 @@ class PrismaManager {
 
 const prismaManager = new PrismaManager();
 
-let prisma;
-try {
-  prisma = await prismaManager.getClient();
-} catch (error) {
-  logger.error('❌ Failed to initialize Prisma client:', { error: error.message });
-  if (env.NODE_ENV === 'production') process.exit(1);
+let prisma = null;
+if (env.DATABASE_ENABLED !== false) {
+  try {
+    prisma = await prismaManager.getClient();
+  } catch (error) {
+    logger.error('❌ Failed to initialize Prisma client:', { error: error.message });
+    if (env.NODE_ENV === 'production') process.exit(1);
+  }
 }
 
 const createDefaultAdmin = async () => {

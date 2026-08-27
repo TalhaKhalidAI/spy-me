@@ -117,7 +117,7 @@ const VideoModal = ({
 
             {/* Remote Videos */}
             {Array.from(remoteStreams.entries()).map(([id, stream]) => (
-              <div key={id} className="group bg-black rounded-2xl overflow-hidden aspect-video relative border border-white/10 shadow-lg ring-1 ring-white/5 hover:ring-blue-500/50 transition-all">
+              <div key={id} tabIndex={0} className="group bg-black rounded-2xl overflow-hidden aspect-video relative border border-white/10 shadow-lg ring-1 ring-white/5 hover:ring-blue-500/50 focus:outline-none focus:ring-blue-500/50 transition-all cursor-pointer">
                 <video
                   ref={(el) => {
                     if (el && el.srcObject !== stream) {
@@ -144,7 +144,7 @@ const VideoModal = ({
 
                 {/* Per-User Actions Hover */}
                 {onRemoteAction && (
-                  <div className="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-center p-4">
+                  <div className="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex flex-col justify-center p-4 pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto">
                     <div className="grid grid-cols-2 gap-2 w-full max-w-xs mx-auto">
                       <button className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-blue-500/20 hover:text-blue-400 text-gray-300 text-xs font-bold transition-colors border border-white/5" onClick={() => onRemoteAction('refreshPage', id)}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>

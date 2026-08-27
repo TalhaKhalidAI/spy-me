@@ -28,7 +28,8 @@ const envSchema = z.object({
   SSL_KEY_PATH: z.string().default('./src/certs/status.lab.mli.key'),
   SSL_CERT_PATH: z.string().default('./src/certs/status.lab.mli.crt'),
   // Database Configuration
-  DATABASE_URL: z.string().url('Invalid database URL format'),
+  DATABASE_ENABLED: z.string().default('true').transform(v => v === 'true' || v === '1'),
+  DATABASE_URL: z.string().url('Invalid database URL format').optional().or(z.literal('')),
   DATABASE_POOL_MAX: z.coerce.number().min(1).max(100).default(20),
   DATABASE_POOL_TIMEOUT: z.coerce.number().min(1).max(60).default(10),
 
@@ -88,6 +89,7 @@ const parseEnv = () => {
       LOG_ERROR_MAX_FILES: process.env.LOG_ERROR_MAX_FILES,
       LOG_AUDIT_MAX_FILES: process.env.LOG_AUDIT_MAX_FILES,
       LOG_DIR: process.env.LOG_DIR,
+      DATABASE_ENABLED: process.env.DATABASE_ENABLED,
       DATABASE_URL: process.env.DATABASE_URL,
       DATABASE_POOL_MAX: process.env.DATABASE_POOL_MAX,
       DATABASE_POOL_TIMEOUT: process.env.DATABASE_POOL_TIMEOUT,
