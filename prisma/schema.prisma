@@ -32,8 +32,22 @@ model User {
   deletedAt     DateTime? // For soft delete
 
   permissions   Permission[]
+  rooms         Room[]
 
   @@map("users")
+}
+
+model Room {
+  id          String   @id @default(uuid())
+  roomId      String   @unique
+  name        String?
+  description String?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("rooms")
 }
 
 model Permission {

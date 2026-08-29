@@ -1,14 +1,13 @@
 // src/api/routes/v1/sfu.routes.js
 import express from 'express';
 import passport from 'passport';
-import { authorize } from '../../middleware/auth.middleware.js';
+import { authorize, requirePermission } from '../../middleware/auth.middleware.js';
 import * as sfuController from '../../controllers/sfu.controller.js';
 
 const SFU_Router = express.Router();
 
-// ─── All SFU routes require admin auth ──────────────
-// SFU_Router.use(passport.authenticate('jwt', { session: false }));
-// SFU_Router.use(authorize('ADMIN'));
+// ─── Ensure user is authenticated for all SFU routes ──────────────
+SFU_Router.use(passport.authenticate('jwt', { session: false }));
 
 
 
@@ -53,7 +52,7 @@ SFU_Router.get('/status', sfuController.getSFUStatus);
  *       400:
  *         description: SFU already running
  */
-SFU_Router.post('/start', sfuController.startSFU);
+SFU_Router.post('/start', requirePermission('permission.sfu.start'), sfuController.startSFU);
 
 /**
  * @swagger
@@ -69,7 +68,7 @@ SFU_Router.post('/start', sfuController.startSFU);
  *       400:
  *         description: SFU not running
  */
-SFU_Router.post('/stop', sfuController.stopSFU);
+SFU_Router.post('/stop', requirePermission('permission.sfu.stop'), sfuController.stopSFU);
 
 /**
  * @swagger
@@ -95,7 +94,11 @@ SFU_Router.post('/stop', sfuController.stopSFU);
  *       200:
  *         description: SFU restarted
  */
-SFU_Router.post('/restart', sfuController.restartSFU);
+SFU_Router.post('/restart', requirePermission('permission.sfu.restart'), sfuController.restartSFU);
+
+// ─── All subsequent SFU management routes require strict Admin auth ───
+// Room routes moved to room.routes.js
+SFU_Router.use(authorize('ADMIN'));
 
 /**
  * @swagger
@@ -106,195 +109,6 @@ SFU_Router.post('/restart', sfuController.restartSFU);
 
 /**
  * @swagger
- * /v1/sfu/rooms:
- *   post:
- *     summary: Create a new WebRTC room
- *     tags: [SFU]
-  
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - roomId
- *             properties:
- *               roomId:
- *                 type: string
- *                 example: "room-123"
- *               options:
- *                 type: object
- *                 properties:
- *                   mediaCodecs:
- *                     type: array
- *                     items:
- *                       type: object
- *     responses:
- *       201:
- *         description: Room created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                   example: success
- *                 data:
- *                   type: object
- *                   properties:
- *                     roomId:
- *                       type: string
- *                     routerId:
- *                       type: string
- *                     createdAt:
- *                       type: string
- *       400:
- *         description: Room ID required
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - Admin only
- *       503:
- *         description: SFU not ready
- */
-SFU_Router.post('/rooms', sfuController.createRoom);
-
-/**
- * @swagger
- * /v1/sfu/rooms:
- *   get:
- *     summary: Get all rooms
- *     tags: [SFU]
- *    
- *     responses:
- *       200:
- *         description: List of all rooms
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                 data:
- *                   type: object
- *                   properties:
- *                     rooms:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           roomId:
- *                             type: string
- *                           routerId:
- *                             type: string
- *                           active:
- *                             type: boolean
- *                           producers:
- *                             type: number
- *                           consumers:
- *                             type: number
- *                     total:
- *                       type: number
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - Admin only
- */
-SFU_Router.get('/rooms', sfuController.getRooms);
-
-/**
- * @swagger
- * /v1/sfu/rooms/{roomId}:
- *   get:
- *     summary: Get room details
- *     tags: [SFU]
- 
- *     parameters:
- *       - in: path
- *         name: roomId
- *         required: true
- *         schema:
- *           type: string
- *         description: Room ID
- *     responses:
- *       200:
- *         description: Room details
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                 data:
- *                   type: object
- *                   properties:
- *                     roomId:
- *                       type: string
- *                     routerId:
- *                       type: string
- *                     active:
- *                       type: boolean
- *                     producers:
- *                       type: array
- *                     consumers:
- *                       type: array
- *                     stats:
- *                       type: object
- *       404:
- *         description: Room not found
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - Admin only
- */
-SFU_Router.get('/rooms/:roomId', sfuController.getRoom);
-
-/**
- * @swagger
- * /v1/sfu/rooms/{roomId}:
- *   delete:
- *     summary: Delete a room
- *     tags: [SFU]
- 
- *     parameters:
- *       - in: path
- *         name: roomId
- *         required: true
- *         schema:
- *           type: string
- *         description: Room ID
- *     responses:
- *       200:
- *         description: Room deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                 data:
- *                   type: object
- *                   properties:
- *                     roomId:
- *                       type: string
- *                     deleted:
- *                       type: boolean
- *                     timestamp:
- *                       type: string
- *       404:
- *         description: Room not found
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - Admin only
- */
-SFU_Router.delete('/rooms/:roomId', sfuController.deleteRoom);
-
 /**
  * @swagger
  * /v1/sfu/rooms/{roomId}/producers:
