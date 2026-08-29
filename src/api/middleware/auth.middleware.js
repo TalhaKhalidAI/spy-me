@@ -18,3 +18,28 @@ export const authorize = (...roles) => {
         next();
     };
 };
+
+/**
+ * Middleware to restrict access based on fine-grained permissions
+ * @param {string} permission - The required permission name
+ */
+export const requirePermission = (permission) => {
+    return (req, res, next) => {
+        if (!req.user) {
+            return next(new AppError('You are not logged in', 401));
+        }
+
+        // Admin inherently has all permissions
+        if (req.user.role === 'ADMIN') {
+            return next();
+        }
+
+        const userPermissions = req.user.permissions?.map(p => p.name) || [];
+
+        if (!userPermissions.includes(permission)) {
+            return next(new AppError(`You do not have the required permission: ${permission}`, 403));
+        }
+
+        next();
+    };
+};

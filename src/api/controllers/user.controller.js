@@ -119,3 +119,71 @@ export const assignPermissions = catchAsync(async (req, res, next) => {
 
     sendSuccess(res, 200, { user: updatedUser }, 'Permissions assigned successfully');
 });
+
+// Admin only: Get a user's permissions
+export const getUserPermissions = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+
+    const user = await prisma.user.findUnique({
+        where: { id },
+        include: { permissions: true }
+    });
+
+    if (!user) {
+        return next(new AppError('User not found', 404));
+    }
+
+    sendSuccess(res, 200, { permissions: user.permissions });
+});
+
+// Admin only: Add permissions to a user (without removing existing)
+export const addPermissions = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+    const { permissions } = req.body;
+
+    if (!Array.isArray(permissions)) {
+        return next(new AppError('Permissions must be an array of strings', 400));
+    }
+
+    const permissionsToConnect = permissions.map(name => ({ name }));
+
+    const updatedUser = await prisma.user.update({
+        where: { id },
+        data: {
+            permissions: {
+                connect: permissionsToConnect
+            }
+        },
+        include: {
+            permissions: true
+        }
+    });
+
+    sendSuccess(res, 200, { user: updatedUser }, 'Permissions added successfully');
+});
+
+// Admin only: Remove specific permissions from a user
+export const removePermissions = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+    const { permissions } = req.body; // Expects an array of permission names
+
+    if (!Array.isArray(permissions)) {
+        return next(new AppError('Permissions must be an array of strings', 400));
+    }
+
+    const permissionsToDisconnect = permissions.map(name => ({ name }));
+
+    const updatedUser = await prisma.user.update({
+        where: { id },
+        data: {
+            permissions: {
+                disconnect: permissionsToDisconnect
+            }
+        },
+        include: {
+            permissions: true
+        }
+    });
+
+    sendSuccess(res, 200, { user: updatedUser }, 'Permissions removed successfully');
+});

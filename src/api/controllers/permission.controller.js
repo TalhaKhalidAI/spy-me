@@ -1,4 +1,4 @@
-import prismaManager from '../../config/databases.js';
+import { prisma } from '../../config/databases.js';
 import { AppError } from '../middleware/error.middleware.js';
 import logger from '../utils/logger.js';
 
@@ -7,7 +7,6 @@ import logger from '../utils/logger.js';
  */
 export const getAllPermissions = async (req, res, next) => {
   try {
-    const prisma = await prismaManager.getClient();
     const permissions = await prisma.permission.findMany();
     
     res.status(200).json({
@@ -31,8 +30,6 @@ export const createPermission = async (req, res, next) => {
     if (!name) {
       return next(new AppError('Permission name is required', 400));
     }
-    
-    const prisma = await prismaManager.getClient();
     
     // Check if it already exists
     const existing = await prisma.permission.findUnique({ where: { name } });
@@ -66,8 +63,6 @@ export const updatePermission = async (req, res, next) => {
     const { id } = req.params;
     const { name, description } = req.body;
     
-    const prisma = await prismaManager.getClient();
-    
     const permission = await prisma.permission.update({
       where: { id },
       data: { name, description }
@@ -96,8 +91,6 @@ export const updatePermission = async (req, res, next) => {
 export const deletePermission = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const prisma = await prismaManager.getClient();
-    
     await prisma.permission.delete({
       where: { id }
     });

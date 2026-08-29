@@ -21,6 +21,7 @@ passport.use(
                             { email: username }
                         ]
                     },
+                    include: { permissions: true }
                 });
 
                 if (!user || user.provider !== 'local' || !user.isActive || user.deletedAt) {
@@ -51,6 +52,7 @@ passport.use(
         try {
             const user = await prisma.user.findUnique({
                 where: { id: payload.sub },
+                include: { permissions: true }
             });
 
             if (user && user.isActive && !user.deletedAt) {

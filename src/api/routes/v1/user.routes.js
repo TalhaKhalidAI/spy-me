@@ -117,9 +117,47 @@ router.post('/restore/:id', authorize('ADMIN'), userController.restoreUser);
 /**
  * @swagger
  * /v1/users/{id}/permissions:
+ *   get:
+ *     summary: Get permissions of a specific user (Admin only)
+ *     tags: [Permissions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of user permissions
  *   post:
- *     summary: Assign permissions to a user (Admin only)
- *     tags: [Users]
+ *     summary: Add specific permissions to a user (Admin only)
+ *     tags: [Permissions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               permissions:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Permissions added
+ *   put:
+ *     summary: Set exact permissions for a user (Bulk update/overwrite) (Admin only)
+ *     tags: [Permissions]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -141,7 +179,35 @@ router.post('/restore/:id', authorize('ADMIN'), userController.restoreUser);
  *     responses:
  *       200:
  *         description: Permissions assigned
+ *   delete:
+ *     summary: Remove specific permissions from a user (Admin only)
+ *     tags: [Permissions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               permissions:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Permissions removed
  */
-router.post('/:id/permissions', authorize('ADMIN'), userController.assignPermissions);
+router.route('/:id/permissions')
+    .get(authorize('ADMIN'), userController.getUserPermissions)
+    .post(authorize('ADMIN'), userController.addPermissions)
+    .put(authorize('ADMIN'), userController.assignPermissions)
+    .delete(authorize('ADMIN'), userController.removePermissions);
 
 export default router;
