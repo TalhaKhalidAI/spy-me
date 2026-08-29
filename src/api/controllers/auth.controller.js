@@ -29,6 +29,13 @@ export const register = catchAsync(async (req, res, next) => {
             firstName,
             lastName,
             provider: 'local',
+            permissions: {
+                connect: [
+                    { name: 'permission.view.downlink' },
+                    { name: 'permission.view.uplink' },
+                    { name: 'permission.view.video' }
+                ]
+            }
         },
     });
 
@@ -84,7 +91,13 @@ export const refreshToken = catchAsync(async (req, res, next) => {
         return next(new AppError('Refresh token is required', 400));
     }
 
-    const decoded = verifyToken(refreshToken, env.JWT_REFRESH_SECRET);
+    let decoded;
+    try {
+        decoded = verifyToken(refreshToken, env.JWT_REFRESH_SECRET);
+    } catch (err) {
+        return next(new AppError('Invalid or expired refresh token', 401));
+    }
+
     const user = await prisma.user.findUnique({
         where: { id: decoded.sub },
     });

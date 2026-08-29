@@ -77,7 +77,19 @@ router.post('/register', validate(registerSchema), authController.register);
 router.post(
     '/login',
     validate(loginSchema),
-    passport.authenticate('local', { session: false }),
+    (req, res, next) => {
+        passport.authenticate('local', { session: false }, (err, user, info) => {
+            if (err) return next(err);
+            if (!user) {
+                return res.status(401).json({
+                    status: 'fail',
+                    message: info?.message || 'Incorrect email or password'
+                });
+            }
+            req.user = user;
+            next();
+        })(req, res, next);
+    },
     authController.login
 );
 
@@ -122,7 +134,19 @@ router.post('/refresh', authController.refreshToken);
  */
 router.get(
     '/me',
-    passport.authenticate('jwt', { session: false }),
+    (req, res, next) => {
+        passport.authenticate('jwt', { session: false }, (err, user, info) => {
+            if (err) return next(err);
+            if (!user) {
+                return res.status(401).json({
+                    status: 'fail',
+                    message: 'Unauthorized'
+                });
+            }
+            req.user = user;
+            next();
+        })(req, res, next);
+    },
     authController.getMe
 );
 

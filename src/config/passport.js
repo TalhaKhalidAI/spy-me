@@ -14,8 +14,13 @@ passport.use(
         },
         async (username, password, done) => {
             try {
-                const user = await prisma.user.findUnique({
-                    where: { username },
+                const user = await prisma.user.findFirst({
+                    where: { 
+                        OR: [
+                            { username: username },
+                            { email: username }
+                        ]
+                    },
                 });
 
                 if (!user || user.provider !== 'local' || !user.isActive || user.deletedAt) {

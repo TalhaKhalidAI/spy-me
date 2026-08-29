@@ -14,8 +14,19 @@ const router = express.Router();
  *   description: User management
  */
 
-// All routes here require authentication
-router.use(passport.authenticate('jwt', { session: false }));
+router.use((req, res, next) => {
+    passport.authenticate('jwt', { session: false }, (err, user, info) => {
+        if (err) return next(err);
+        if (!user) {
+            return res.status(401).json({
+                status: 'fail',
+                message: 'Unauthorized'
+            });
+        }
+        req.user = user;
+        next();
+    })(req, res, next);
+});
 
 /**
  * @swagger
@@ -102,5 +113,35 @@ router.get('/deleted', authorize('ADMIN'), userController.getDeletedUsers);
  *         description: User restored
  */
 router.post('/restore/:id', authorize('ADMIN'), userController.restoreUser);
+
+/**
+ * @swagger
+ * /v1/users/{id}/permissions:
+ *   post:
+ *     summary: Assign permissions to a user (Admin only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               permissions:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Permissions assigned
+ */
+router.post('/:id/permissions', authorize('ADMIN'), userController.assignPermissions);
 
 export default router;

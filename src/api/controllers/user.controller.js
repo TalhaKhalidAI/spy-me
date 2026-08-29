@@ -91,3 +91,31 @@ export const restoreUser = catchAsync(async (req, res, next) => {
 
     sendSuccess(res, 200, { user }, 'User restored successfully');
 });
+
+// Admin only: Assign permissions to a user
+export const assignPermissions = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+    const { permissions } = req.body; // Expects an array of permission names
+
+    if (!Array.isArray(permissions)) {
+        return next(new AppError('Permissions must be an array of strings', 400));
+    }
+
+    // Map names to objects
+    const permissionsToConnect = permissions.map(name => ({ name }));
+
+    const updatedUser = await prisma.user.update({
+        where: { id },
+        data: {
+            permissions: {
+                set: [], // Clear existing (or omit to just append, but typically we set exact permissions)
+                connect: permissionsToConnect
+            }
+        },
+        include: {
+            permissions: true
+        }
+    });
+
+    sendSuccess(res, 200, { user: updatedUser }, 'Permissions assigned successfully');
+});

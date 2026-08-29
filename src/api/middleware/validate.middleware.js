@@ -11,12 +11,14 @@ export const validate = (schema, source = 'body') => (req, res, next) => {
         schema.parse(data);
         next();
     } catch (error) {
-        const errors = error.errors.map(err => ({
-            field: err.path.join('.'),
-            message: err.message,
-        }));
-
-        next(new AppError('Validation Failed', 400));
-        // We can attach errors to the AppError if we want more detail in response
+        if (error.errors && Array.isArray(error.errors)) {
+            const errors = error.errors.map(err => ({
+                field: err.path.join('.'),
+                message: err.message,
+            }));
+            // You can optionally pass these detailed errors to AppError
+            return next(new AppError('Validation Failed', 400));
+        }
+        return next(new AppError('Validation Error', 400));
     }
 };
