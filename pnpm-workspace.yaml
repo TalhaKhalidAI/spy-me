@@ -2,5 +2,6 @@ allowBuilds:
   '@prisma/engines': false
   '@scarf/scarf': false
   argon2: false
+  better-sqlite3: set this to true or false
   mediasoup: false
   prisma: false

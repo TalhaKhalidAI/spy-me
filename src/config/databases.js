@@ -1,7 +1,7 @@
 // config/prisma.js
-import { PrismaClient } from '@prisma/client';
-import pg from 'pg';
-import { PrismaPg } from '@prisma/adapter-pg';
+import pkg from '@prisma/client';
+const { PrismaClient } = pkg;
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { env } from './env.js';
 import logger from '../api/utils/logger.js';
 import { PasswordService } from '../services/password.service.js';
@@ -29,19 +29,12 @@ class PrismaManager {
 
       // Log connection attempt (without sensitive data)
       const sanitizedUrl = env.DATABASE_URL.replace(/:[^:@]*@/, ':***@');
-      logger.info('🔌 Connecting to PostgreSQL via Driver Adapter', {
+      logger.info('🔌 Connecting to SQLite', {
         url: sanitizedUrl,
         environment: env.NODE_ENV,
       });
 
-      // Prisma 7 requires a driver adapter for standard PostgreSQL connections
-      this.pool = new pg.Pool({
-        connectionString: env.DATABASE_URL,
-        max: env.DATABASE_POOL_MAX || 20,
-        idleTimeoutMillis: (env.DATABASE_POOL_TIMEOUT || 10) * 1000,
-      });
-
-      const adapter = new PrismaPg(this.pool);
+      const adapter = new PrismaLibSql({ url: env.DATABASE_URL });
 
       let client = new PrismaClient({
         adapter,
@@ -83,7 +76,7 @@ class PrismaManager {
 
       // Test connection
       await client.$connect();
-      logger.info('✅ PostgreSQL connected successfully');
+      logger.info('✅ SQLite connected successfully');
 
       this.prisma = client;
       this.connectionAttempts = 0;
@@ -92,10 +85,9 @@ class PrismaManager {
     } catch (error) {
       this.connectionAttempts++;
 
-      logger.error('❌ PostgreSQL connection failed', {
+      logger.error('❌ SQLite connection failed', {
         attempt: this.connectionAttempts,
-        maxRetries: this.maxRetries,
-        error: error.message,
+        maxRetries: this.maxRetries
       });
 
       if (this.connectionAttempts < this.maxRetries) {
@@ -106,7 +98,7 @@ class PrismaManager {
         return this.getClient();
       }
 
-      logger.error('💥 Failed to connect to PostgreSQL after max retries');
+      logger.error('💥 Failed to connect to SQLite after max retries');
       throw new Error(`Failed to connect to database after ${this.maxRetries} attempts`);
     }
   }
@@ -114,10 +106,7 @@ class PrismaManager {
   async disconnect() {
     if (this.prisma) {
       await this.prisma.$disconnect();
-      if (this.pool) {
-        await this.pool.end();
-      }
-      logger.info('📤 PostgreSQL disconnected gracefully');
+      logger.info('📤 SQLite disconnected gracefully');
       this.prisma = null;
       this.pool = null;
     }
@@ -163,7 +152,7 @@ if (env.DATABASE_ENABLED !== false) {
   try {
     prisma = await prismaManager.getClient();
   } catch (error) {
-    logger.error('❌ Failed to initialize Prisma client:', { error: error.message });
+    logger.error('❌ Failed to initialize Prisma client:', { error: error });
     if (env.NODE_ENV === 'production') process.exit(1);
   }
 }

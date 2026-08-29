@@ -3,10 +3,11 @@
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 model User {
@@ -17,7 +18,7 @@ model User {
   firstName     String?
   lastName      String?
   avatar        String?
-  role          Role      @default(USER)
+  role          String    @default("USER")
   isActive      Boolean   @default(true)
   emailVerified DateTime?
   
@@ -31,10 +32,4 @@ model User {
   deletedAt     DateTime? // For soft delete
 
   @@map("users")
-}
-
-enum Role {
-  USER
-  ADMIN
-  MODERATOR
 }
