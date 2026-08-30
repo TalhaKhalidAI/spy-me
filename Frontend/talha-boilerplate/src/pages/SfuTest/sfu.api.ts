@@ -204,6 +204,39 @@ export const sfuApi = {
     return Array.isArray(data) ? data : [];
   },
 
+  getRoomsWithToken: async (token: string | null): Promise<Room[]> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const url = `${API_BASE}/rooms`;
+    const response = await fetch(url, { method: 'GET', headers });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HTTP ${response.status}: ${text}`);
+    }
+
+    const rawData = await response.json();
+    const data = rawData?.data ?? rawData;
+
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      if (data.rooms) return data.rooms;
+      if (data.data) return data.data;
+      const rooms: Room[] = [];
+      Object.values(data).forEach((userRooms: any) => {
+        if (Array.isArray(userRooms)) {
+          userRooms.forEach((id: string) => rooms.push({ id, roomId: id, name: id } as unknown as Room));
+        } else if (typeof userRooms === 'object') {
+          Object.entries(userRooms).forEach(([roomId, details]: [string, any]) => {
+            rooms.push({ id: roomId, roomId, ...details });
+          });
+        }
+      });
+      return rooms;
+    }
+    return Array.isArray(data) ? data : [];
+  },
+
   getRoom: async (roomId: string): Promise<RoomDetail> => {
     const rawData = await apiClient(`/rooms?id=${roomId}`);
     // The backend returns `{ "USER_ID": { "roomId": { ...details } } }`

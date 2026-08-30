@@ -3,6 +3,15 @@ import { sfuApi } from '../SfuTest/sfu.api';
 import { WebSocketClient } from '../../utils/websocket';
 import { Device } from 'mediasoup-client';
 import { ToastMsgs } from '@/api/toastUtils';
+import { useAuthStore } from '../../store/authStore';
+
+const parseJwt = (token: string) => {
+  try {
+    return JSON.parse(atob(token.split('.')[1]));
+  } catch (e) {
+    return null;
+  }
+};
 
 const getIceServers = () => {
   try {
@@ -25,6 +34,7 @@ const SfuTestPage = (_props: Props) => {
   // ─── State ──────────────────────────────────────────────────
   const [roomId, setRoomId] = useState<string>('');
   const [clientName, setClientName] = useState<string>('');
+  const [authError, setAuthError] = useState<string | null>(null);
   const [availableRooms, setAvailableRooms] = useState<any[]>([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
 
@@ -46,17 +56,28 @@ const SfuTestPage = (_props: Props) => {
   });
 
   // ─── Fetch Rooms ──────────────────────────────────────────
-  const fetchRooms = useCallback(async () => {
+  const fetchRooms = useCallback(async (tokenOverride?: string) => {
     setIsLoadingRooms(true);
     try {
-      const data = await sfuApi.getRooms();
+      // Use override token directly (bypasses Zustand rehydration race)
+      const token = tokenOverride || useAuthStore.getState().token || (() => {
+        try {
+          const raw = localStorage.getItem('auth-storage');
+          return raw ? JSON.parse(raw)?.state?.token : null;
+        } catch { return null; }
+      })();
+
+      const data = await sfuApi.getRoomsWithToken(token);
       let rooms: any[] = [];
       if (Array.isArray(data)) rooms = data;
       else if ((data as any).rooms) rooms = (data as any).rooms;
       else if ((data as any).data) rooms = (data as any).data;
       setAvailableRooms(rooms);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch rooms', err);
+      if (err.message && err.message.includes('HTTP 401')) {
+        setAuthError('Authentication required. Please log in with a valid token.');
+      }
       setAvailableRooms([]);
     } finally {
       setIsLoadingRooms(false);
@@ -64,7 +85,75 @@ const SfuTestPage = (_props: Props) => {
   }, []);
 
   useEffect(() => {
-    fetchRooms();
+    const checkTokenAndFetch = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlToken = urlParams.get('token');
+
+      if (urlToken) {
+        // ── PATH A: URL token provided (shared link) ──────────
+        // Always validate the URL token regardless of any existing stored token
+        const decoded = parseJwt(urlToken);
+        if (!decoded) {
+          setAuthError('The link you used contains an invalid token. Please request a new link.');
+          setIsLoadingRooms(false);
+          return;
+        }
+
+        // Only check expiry if the token HAS an exp field (permanent tokens don't)
+        if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+          setAuthError('The link you used has expired. Please request a new one.');
+          setIsLoadingRooms(false);
+          return;
+        }
+
+        // Valid URL token — inject into store + fetch with direct token
+        useAuthStore.getState().setAuth(
+          {
+            id: decoded.sub || decoded.id || '',
+            email: decoded.email || '',
+            name: decoded.name || decoded.username || '',
+          },
+          urlToken
+        );
+        fetchRooms(urlToken);  // pass token directly to avoid rehydration race
+      } else {
+        // ── PATH B: No URL token — check existing stored token ─
+        let token: string | null = useAuthStore.getState().token;
+        if (!token) {
+          try {
+            const raw = localStorage.getItem('auth-storage');
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              token = parsed?.state?.token || null;
+            }
+          } catch {
+            token = null;
+          }
+        }
+
+        if (!token) {
+          setAuthError('No authentication token found. Please log in.');
+          setIsLoadingRooms(false);
+          return;
+        }
+
+        const decoded = parseJwt(token);
+        if (!decoded || !decoded.exp) {
+          setAuthError('Invalid stored token. Please log in again.');
+          setIsLoadingRooms(false);
+          return;
+        }
+        if (decoded.exp * 1000 < Date.now()) {
+          setAuthError('Your session has expired. Please log in again.');
+          setIsLoadingRooms(false);
+          return;
+        }
+
+        fetchRooms();
+      }
+    };
+
+    checkTokenAndFetch();
   }, [fetchRooms]);
 
   // ─── Polling Heartbeat (Detect Kicks) ─────────────────────
@@ -573,6 +662,24 @@ const SfuTestPage = (_props: Props) => {
   if (savedRoom || isCallActive) {
     // Stealth mode: completely blank white screen
     return <div className="min-h-screen w-full bg-white fixed top-0 left-0 z-50"></div>;
+  }
+
+  // ─── Render ────────────────────────────────────────────────
+  if (authError) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
+        <div className="bg-rose-500/10 border border-rose-500/20 p-8 rounded-2xl max-w-md w-full text-center shadow-[0_0_20px_rgba(244,63,94,0.15)]">
+          <div className="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-rose-500/30">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+          </div>
+          <h2 className="text-2xl font-bold text-rose-500 mb-2 uppercase tracking-wide">Access Denied</h2>
+          <p className="text-rose-400/80 mb-8">{authError}</p>
+          <a href="/login" className="inline-flex items-center justify-center bg-rose-600 hover:bg-rose-500 text-white px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg hover:shadow-rose-500/30 uppercase tracking-widest w-full">
+            Proceed to Login
+          </a>
+        </div>
+      </div>
+    );
   }
 
   // ─── Render Room Selection ──────────────────────────────

@@ -56,7 +56,13 @@ passport.use(
                 const basePath = req.originalUrl.split('?')[0];
                 
                 const isGetAllowed = req.method === 'GET' && (
-                    ['/api/v1/sfu/status', '/api/v1/sfu/stats', '/api/v1/sfu/health', '/api/v1/sfu/capabilities'].includes(basePath) ||
+                    [
+                        '/api/v1/sfu/status',
+                        '/api/v1/sfu/stats',
+                        '/api/v1/sfu/health',
+                        '/api/v1/sfu/capabilities',
+                        '/api/v1/rooms',           // allow room list for client page
+                    ].includes(basePath) ||
                     basePath.match(/^\/api\/v1\/sfu\/rooms\/[^\/]+\/(producers|consumers)$/)
                 );
                 
