@@ -85,6 +85,7 @@ export class RouterManager {
             
             const router = await worker.createRouter({
                 mediaCodecs: options.mediaCodecs || this.#mediaCodecs,
+                appData: options.appData || {},
             });
             
             this.#routers.set(roomId, router);

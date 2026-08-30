@@ -23,6 +23,11 @@ export const createRoom = catchAsync(async (req, res, next) => {
         // Create router in Mediasoup
         const router = await sfu.routerManager.createRouter(roomId, {
             mediaCodecs: options.mediaCodecs || undefined,
+            appData: {
+                name,
+                description,
+                createdBy: req.user.id
+            }
         });
 
         // Save to database
@@ -133,9 +138,9 @@ export const getRooms = catchAsync(async (req, res, next) => {
 
     // Fetch all rooms grouped by user
     const dbRooms = await prisma.room.findMany();
-    
+
     const formattedResponse = {};
-    
+
     // Group roomIds by userId
     for (const room of dbRooms) {
         if (!formattedResponse[room.userId]) {
@@ -165,13 +170,13 @@ export const deleteRoom = catchAsync(async (req, res, next) => {
 
     // Close all producers in the room
     await sfu.producerManager?.closeRoomProducers(roomId, 'room_deleted');
-    
+
     // Close all consumers in the room
     await sfu.consumerManager?.closeRoomConsumers(roomId, 'room_deleted');
-    
+
     // Close all transports in the room
     await sfu.transportManager?.closeRoomTransports(roomId, 'room_deleted');
-    
+
     // Close the router
     await sfu.routerManager?.closeRouter(roomId);
 

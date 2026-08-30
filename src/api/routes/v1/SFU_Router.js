@@ -1,7 +1,7 @@
 // src/api/routes/v1/sfu.routes.js
 import express from 'express';
 import passport from 'passport';
-import { authorize, requirePermission } from '../../middleware/auth.middleware.js';
+import { authorize, requirePermission, requireAdminOrRoomMember } from '../../middleware/auth.middleware.js';
 import * as sfuController from '../../controllers/sfu.controller.js';
 
 const SFU_Router = express.Router();
@@ -96,9 +96,9 @@ SFU_Router.post('/stop', requirePermission('permission.sfu.stop'), sfuController
  */
 SFU_Router.post('/restart', requirePermission('permission.sfu.restart'), sfuController.restartSFU);
 
-// ─── All subsequent SFU management routes require strict Admin auth ───
+//
+// ─── All subsequent SFU management routes use granular permissions ───
 // Room routes moved to room.routes.js
-SFU_Router.use(authorize('ADMIN'));
 
 /**
  * @swagger
@@ -109,13 +109,12 @@ SFU_Router.use(authorize('ADMIN'));
 
 /**
  * @swagger
-/**
- * @swagger
  * /v1/sfu/rooms/{roomId}/producers:
  *   get:
  *     summary: Get all producers in a room
  *     tags: [SFU]
- 
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: roomId
@@ -158,9 +157,9 @@ SFU_Router.use(authorize('ADMIN'));
  *       401:
  *         description: Unauthorized
  *       403:
- *         description: Forbidden - Admin only
+ *         description: Forbidden
  */
-SFU_Router.get('/rooms/:roomId/producers', sfuController.getRoomProducers);
+SFU_Router.get('/rooms/:roomId/producers', requirePermission('permission.view.uplink'), sfuController.getRoomProducers);
 
 /**
  * @swagger
@@ -168,7 +167,8 @@ SFU_Router.get('/rooms/:roomId/producers', sfuController.getRoomProducers);
  *   get:
  *     summary: Get all consumers in a room
  *     tags: [SFU]
- 
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: roomId
@@ -211,17 +211,18 @@ SFU_Router.get('/rooms/:roomId/producers', sfuController.getRoomProducers);
  *       401:
  *         description: Unauthorized
  *       403:
- *         description: Forbidden - Admin only
+ *         description: Forbidden
  */
-SFU_Router.get('/rooms/:roomId/consumers', sfuController.getRoomConsumers);
+SFU_Router.get('/rooms/:roomId/consumers', requirePermission('permission.view.downlink'), sfuController.getRoomConsumers);
 
 /**
  * @swagger
  * /v1/sfu/producers/{producerId}:
  *   delete:
- *     summary: Force close a producer (Admin)
+ *     summary: Force close a producer
  *     tags: [SFU]
- 
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: producerId
@@ -253,17 +254,18 @@ SFU_Router.get('/rooms/:roomId/consumers', sfuController.getRoomConsumers);
  *       401:
  *         description: Unauthorized
  *       403:
- *         description: Forbidden - Admin only
+ *         description: Forbidden
  */
-SFU_Router.delete('/producers/:producerId', sfuController.forceCloseProducer);
+SFU_Router.delete('/producers/:producerId', requirePermission('permission.remove.peer'), sfuController.forceCloseProducer);
 
 /**
  * @swagger
  * /v1/sfu/consumers/{consumerId}:
  *   delete:
- *     summary: Force close a consumer (Admin)
+ *     summary: Force close a consumer
  *     tags: [SFU]
- 
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: consumerId
@@ -295,9 +297,9 @@ SFU_Router.delete('/producers/:producerId', sfuController.forceCloseProducer);
  *       401:
  *         description: Unauthorized
  *       403:
- *         description: Forbidden - Admin only
+ *         description: Forbidden
  */
-SFU_Router.delete('/consumers/:consumerId', sfuController.forceCloseConsumer);
+SFU_Router.delete('/consumers/:consumerId', requirePermission('permission.remove.peer'), sfuController.forceCloseConsumer);
 
 /**
  * @swagger
@@ -305,7 +307,8 @@ SFU_Router.delete('/consumers/:consumerId', sfuController.forceCloseConsumer);
  *   get:
  *     summary: Get SFU statistics
  *     tags: [SFU]
- 
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: SFU statistics
@@ -353,7 +356,8 @@ SFU_Router.get('/stats', sfuController.getSFUStats);
  *   get:
  *     summary: Get SFU health status
  *     tags: [SFU]
- 
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: SFU is healthy
@@ -397,7 +401,8 @@ SFU_Router.get('/health', sfuController.getSFUHealth);
  *   get:
  *     summary: Get RTP capabilities
  *     tags: [SFU]
- 
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: RTP capabilities
@@ -428,7 +433,8 @@ SFU_Router.get('/capabilities', sfuController.getCapabilities);
  *   post:
  *     summary: Reset SFU (Admin only - DANGEROUS)
  *     tags: [SFU]
-  
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: SFU reset successfully
@@ -453,6 +459,6 @@ SFU_Router.get('/capabilities', sfuController.getCapabilities);
  *       403:
  *         description: Forbidden - Admin only
  */
-SFU_Router.post('/reset', sfuController.resetSFU);
+SFU_Router.post('/reset', requirePermission('permission.sfu.reset'), sfuController.resetSFU);
 
 export default SFU_Router;

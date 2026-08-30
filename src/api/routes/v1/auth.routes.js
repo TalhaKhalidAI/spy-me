@@ -1,6 +1,7 @@
 import express from 'express';
 import passport from 'passport';
 import * as authController from '../../controllers/auth.controller.js';
+import { authorize } from '../../middleware/auth.middleware.js';
 import { validate } from '../../middleware/validate.middleware.js';
 import { registerSchema, loginSchema } from '../../validators/auth.validator.js';
 
@@ -172,6 +173,26 @@ router.get(
     '/github/callback',
     passport.authenticate('github', { session: false, failureRedirect: '/login' }),
     authController.login
+);
+
+/**
+ * @swagger
+ * /v1/auth/permanent-token:
+ *   post:
+ *     summary: Generate a permanent WebSocket token (Admin only)
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Permanent token generated
+ *       403:
+ *         description: Forbidden
+ */
+router.post(
+    '/permanent-token',
+    passport.authenticate('jwt', { session: false }),
+    authController.generatePermanentToken
 );
 
 export default router;

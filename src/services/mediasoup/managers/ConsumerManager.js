@@ -113,6 +113,7 @@ export class ConsumerManager extends EventEmitter {
             if (!transport) {
                 throw new Error(`Transport ${transportId} not found or closed`);
             }
+
             if (transport.closed) {
                 throw new Error(`Transport ${transportId} is closed`);
             }

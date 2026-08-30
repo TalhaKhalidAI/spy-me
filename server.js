@@ -23,6 +23,21 @@ import { randomUUID } from 'crypto';
 // ✅ Import SFU
 import sfu from './src/services/mediasoup/index.js';
 
+import { prisma } from './src/config/databases.js';
+import jwt from 'jsonwebtoken';
+
+// Global error handling for promises and exceptions
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❗ Unhandled Rejection at:', promise, 'reason:', reason);
+    logger.error('❗ Unhandled Rejection', { reason });
+});
+process.on('uncaughtException', (err) => {
+    console.error('❗ Uncaught Exception:', err);
+    logger.error('❗ Uncaught Exception', { err });
+    // Optionally exit after logging
+    // process.exit(1);
+});
+
 const app = express();
 
 /**
@@ -209,6 +224,41 @@ const io = new Server(server, {
     maxHttpBufferSize: 1e6,
 });
 
+// ─── Socket.IO Authentication Middleware ────────────────────────────────────
+io.use(async (socket, next) => {
+    try {
+        let token = socket.handshake.auth?.token || socket.handshake.query?.token;
+        if (!token) {
+            return next(new Error('Authentication error: Token required'));
+        }
+
+        // Remove 'Bearer ' if passed in
+        if (token.startsWith('Bearer ')) token = token.slice(7);
+
+        const decoded = jwt.verify(token, env.JWT_SECRET);
+
+        // Ensure ONLY the permanent token can connect to WebSockets
+        if (decoded.type !== 'permanent') {
+            return next(new Error('Authentication error: Only permanent service tokens are allowed for WebSockets'));
+        }
+
+        // Load the real user from the database
+        const user = await prisma.user.findUnique({
+            where: { id: decoded.sub },
+            include: { permissions: true }
+        });
+
+        if (!user || !user.isActive || user.deletedAt) {
+            return next(new Error('Authentication error: User inactive or not found'));
+        }
+
+        socket.user = user;
+        next();
+    } catch (err) {
+        return next(new Error('Authentication error: Invalid token'));
+    }
+});
+
 // ─── Socket.IO Connection Handler ────────────────────────────────────────────
 io.on('connection', (socket) => {
     const socketId = socket.id;
@@ -248,7 +298,12 @@ io.on('connection', (socket) => {
             }
 
             const roomId = data?.roomId || socket.roomId || 'default-room';
-            const result = await sfu.createSendTransport(socketId, roomId);
+            const result = await sfu.createSendTransport(socketId, roomId, {
+                appData: {
+                    clientName: socket.user.username,
+                    role: socket.user.role
+                }
+            });
 
             if (callback) {
                 callback({
@@ -277,7 +332,12 @@ io.on('connection', (socket) => {
             }
 
             const roomId = data?.roomId || socket.roomId || 'default-room';
-            const result = await sfu.createRecvTransport(socketId, roomId);
+            const result = await sfu.createRecvTransport(socketId, roomId, {
+                appData: {
+                    clientName: socket.user.username,
+                    role: socket.user.role
+                }
+            });
 
             if (callback) {
                 callback({
@@ -358,6 +418,10 @@ io.on('connection', (socket) => {
                 kind,
                 rtpParameters,
                 source,
+                appData: {
+                    clientName: socket.user.username,
+                    role: socket.user.role
+                }
             });
 
             // Notify other clients in the room
@@ -413,7 +477,13 @@ io.on('connection', (socket) => {
                 roomId,
                 producerId,
                 rtpCapabilities,
-                options: { paused: false },
+                options: {
+                    paused: false,
+                    appData: {
+                        clientName: socket.user.username,
+                        role: socket.user.role
+                    }
+                },
             });
             if (consumer.kind === 'video') {
                 await consumer.requestKeyFrame();
@@ -537,6 +607,23 @@ io.on('connection', (socket) => {
 
             if (!roomId) {
                 throw new Error('roomId is required');
+            }
+
+            // 1. Verify the room actually exists in the Prisma Database
+            const dbRoom = await prisma.room.findUnique({
+                where: { roomId }
+            });
+            if (!dbRoom) {
+                throw new Error('Invalid Room: This room does not exist in the database');
+            }
+
+            // 2. Check if the Mediasoup Router exists in memory
+            let router = sfu.routerManager?.getRouter(roomId);
+
+            // 3. If the server rebooted (wiping memory) but the DB room is valid, recreate the Mediasoup router!
+            if (!router) {
+                console.log(`⚠️ Router missing for DB room ${roomId}. Re-creating in Mediasoup...`);
+                router = await sfu.routerManager.createRouter(roomId);
             }
 
             // Leave previous room
@@ -733,7 +820,9 @@ io.on('connection', (socket) => {
             if (callback) callback({ success: true, roomId });
         } catch (error) {
             console.error(`❌ unmuteAudio error:`, error.message);
-            if (callback) callback({ error: error.message });
+            if (callback) {
+                callback({ error: error.message });
+            }
         }
     });
 
@@ -763,7 +852,9 @@ io.on('connection', (socket) => {
             if (callback) callback({ success: true, roomId });
         } catch (error) {
             console.error(`❌ stopVideo error:`, error.message);
-            if (callback) callback({ error: error.message });
+            if (callback) {
+                callback({ error: error.message });
+            }
         }
     });
 
@@ -826,6 +917,7 @@ const start = async () => {
 
         const isHttpsServer = server instanceof https.Server;
         const protocol = isHttpsServer ? 'https' : 'http';
+        console.log('🔧 Debug: About to call server.listen with PORT', PORT, 'and IP', env.LISTEN_IP || '0.0.0.0');
         const wsProtocol = isHttpsServer ? 'wss' : 'ws';
 
         server.listen(PORT, env.LISTEN_IP || '0.0.0.0', () => {

@@ -29,11 +29,11 @@ export class TransportManager extends EventEmitter {
 
     constructor(routerManager, config = {}) {
         super();
-        
+
         if (!routerManager) {
             throw new Error('RouterManager is required for TransportManager');
         }
-        
+
         this.#routerManager = routerManager;
         this.#config = {
             listenIp: config.listenIp || env.LISTEN_IP || '0.0.0.0',
@@ -46,7 +46,7 @@ export class TransportManager extends EventEmitter {
             minBitrate: config.minBitrate || 100000, // 100 Kbps
             ...config
         };
-        
+
         console.log(`🚀 TransportManager initialized`);
         this.emit('initialized', { config: this.#config });
     }
@@ -120,9 +120,9 @@ export class TransportManager extends EventEmitter {
             }
 
             // Calculate bitrate
-            let bitrate = options.initialAvailableOutgoingBitrate || 
-                         this.#config.initialAvailableOutgoingBitrate;
-            
+            let bitrate = options.initialAvailableOutgoingBitrate ||
+                this.#config.initialAvailableOutgoingBitrate;
+
             if (direction === 'recv') {
                 bitrate = 0; // Receive transports don't need outgoing bitrate
             }
@@ -133,8 +133,8 @@ export class TransportManager extends EventEmitter {
                 throw new Error(`Router for room ${roomId} not found`);
             }
             const iceServerss = env.iceServers || [];
-            if (iceServerss.length>0){
-                console.log("ice server exist",iceServerss)
+            if (iceServerss.length > 0) {
+                console.log("ice server exist", iceServerss)
             }
             // Create the transport
             const transport = await router.createWebRtcTransport({
@@ -144,7 +144,7 @@ export class TransportManager extends EventEmitter {
                         announcedIp: options.announcedIp || this.#config.announcedIp
                     }
                 ],
-                iceServers:iceServerss,
+                iceServers: iceServerss,
                 enableUdp: options.enableUdp !== undefined ? options.enableUdp : this.#config.enableUdp,
                 enableTcp: options.enableTcp !== undefined ? options.enableTcp : this.#config.enableTcp,
                 preferUdp: options.preferUdp !== undefined ? options.preferUdp : this.#config.preferUdp,
@@ -252,7 +252,7 @@ export class TransportManager extends EventEmitter {
             try {
                 const metadata = this.#transportMetadata.get(transportId);
                 if (!metadata) return;
-                
+
                 // Check if transport is still active
                 if (!transport.closed && !transport.iceState) {
                     console.log(`⏰ Transport ${transportId} timed out, closing...`);
@@ -311,11 +311,13 @@ export class TransportManager extends EventEmitter {
     getTransportMetadata(transportId) {
         const metadata = this.#transportMetadata.get(transportId);
         if (!metadata) return undefined;
-        
+
         // Remove timeout ref to avoid leaking internals
         const { timeoutRef, ...safeMetadata } = metadata;
         return safeMetadata;
     }
+
+
 
     /**
      * Get all transports for a room
@@ -332,20 +334,20 @@ export class TransportManager extends EventEmitter {
         return result;
     }
 
-    /**
-     * Get all transports for a peer
-     * @param {string} socketId - Socket ID
-     * @returns {Array<{id: string, metadata: Object}>}
-     */
-    #getTransportsForPeer(socketId) {
-        const result = [];
-        for (const [id, metadata] of this.#transportMetadata) {
-            if (metadata.socketId === socketId && !this.#transports.get(id)?.closed) {
-                result.push({ id, metadata });
-            }
+/**
+ * Get all transports for a peer
+ * @param {string} socketId - Socket ID
+ * @returns {Array<{id: string, metadata: Object}>}
+ */
+#getTransportsForPeer(socketId) {
+    const result = [];
+    for (const [id, metadata] of this.#transportMetadata) {
+        if (metadata.socketId === socketId && !this.#transports.get(id)?.closed) {
+            result.push({ id, metadata });
         }
-        return result;
     }
+    return result;
+}
 
     /**
      * Close a transport
@@ -354,55 +356,55 @@ export class TransportManager extends EventEmitter {
      * @returns {Promise<boolean>}
      */
     async closeTransport(transportId, reason = 'manual') {
-        const transport = this.#transports.get(transportId);
-        if (!transport) {
-            console.warn(`⚠️ Transport ${transportId} not found`);
-            return false;
-        }
-
-        try {
-            // Clear timeout
-            const metadata = this.#transportMetadata.get(transportId);
-            if (metadata?.timeoutRef) {
-                clearTimeout(metadata.timeoutRef);
-            }
-
-            await transport.close();
-            this.#handleTransportClose(transportId, reason);
-            return true;
-        } catch (error) {
-            console.error(`❌ Failed to close transport ${transportId}:`, error.message);
-            return false;
-        }
+    const transport = this.#transports.get(transportId);
+    if (!transport) {
+        console.warn(`⚠️ Transport ${transportId} not found`);
+        return false;
     }
 
-    /**
-     * Handle transport close event
-     * @param {string} transportId - Transport ID
-     * @param {string} reason - Reason for closing
-     */
-    #handleTransportClose(transportId, reason = 'closed') {
+    try {
+        // Clear timeout
         const metadata = this.#transportMetadata.get(transportId);
-        if (metadata) {
-            metadata.closedAt = new Date();
-            this.#transportMetadata.set(transportId, metadata);
+        if (metadata?.timeoutRef) {
+            clearTimeout(metadata.timeoutRef);
         }
 
-        this.#transports.delete(transportId);
-        
-        console.log(`🗑️ Transport ${transportId} removed (${reason})`);
-        this.emit('transport:closed', { 
-            transportId, 
-            reason, 
-            metadata,
-            timestamp: new Date() 
-        });
-
-        // Clean up after delay
-        setTimeout(() => {
-            this.#transportMetadata.delete(transportId);
-        }, 5000);
+        await transport.close();
+        this.#handleTransportClose(transportId, reason);
+        return true;
+    } catch (error) {
+        console.error(`❌ Failed to close transport ${transportId}:`, error.message);
+        return false;
     }
+}
+
+/**
+ * Handle transport close event
+ * @param {string} transportId - Transport ID
+ * @param {string} reason - Reason for closing
+ */
+#handleTransportClose(transportId, reason = 'closed') {
+    const metadata = this.#transportMetadata.get(transportId);
+    if (metadata) {
+        metadata.closedAt = new Date();
+        this.#transportMetadata.set(transportId, metadata);
+    }
+
+    this.#transports.delete(transportId);
+
+    console.log(`🗑️ Transport ${transportId} removed (${reason})`);
+    this.emit('transport:closed', {
+        transportId,
+        reason,
+        metadata,
+        timestamp: new Date()
+    });
+
+    // Clean up after delay
+    setTimeout(() => {
+        this.#transportMetadata.delete(transportId);
+    }, 5000);
+}
 
     /**
      * Close all transports for a room
@@ -411,16 +413,16 @@ export class TransportManager extends EventEmitter {
      * @returns {Promise<void>}
      */
     async closeRoomTransports(roomId, reason = 'room_closed') {
-        const transports = this.#getTransportsForRoom(roomId);
-        console.log(`🛑 Closing ${transports.length} transports for room ${roomId}...`);
-        
-        const promises = transports.map(({ id }) => 
-            this.closeTransport(id, reason)
-        );
-        
-        await Promise.all(promises);
-        this.emit('room:transports_closed', { roomId, count: transports.length });
-    }
+    const transports = this.#getTransportsForRoom(roomId);
+    console.log(`🛑 Closing ${transports.length} transports for room ${roomId}...`);
+
+    const promises = transports.map(({ id }) =>
+        this.closeTransport(id, reason)
+    );
+
+    await Promise.all(promises);
+    this.emit('room:transports_closed', { roomId, count: transports.length });
+}
 
     /**
      * Close all transports for a peer
@@ -429,16 +431,16 @@ export class TransportManager extends EventEmitter {
      * @returns {Promise<void>}
      */
     async closePeerTransports(socketId, reason = 'peer_disconnected') {
-        const transports = this.#getTransportsForPeer(socketId);
-        console.log(`🛑 Closing ${transports.length} transports for peer ${socketId}...`);
-        
-        const promises = transports.map(({ id }) => 
-            this.closeTransport(id, reason)
-        );
-        
-        await Promise.all(promises);
-        this.emit('peer:transports_closed', { socketId, count: transports.length });
-    }
+    const transports = this.#getTransportsForPeer(socketId);
+    console.log(`🛑 Closing ${transports.length} transports for peer ${socketId}...`);
+
+    const promises = transports.map(({ id }) =>
+        this.closeTransport(id, reason)
+    );
+
+    await Promise.all(promises);
+    this.emit('peer:transports_closed', { socketId, count: transports.length });
+}
 
     /**
      * Close all transports
@@ -446,18 +448,18 @@ export class TransportManager extends EventEmitter {
      * @returns {Promise<void>}
      */
     async closeAllTransports(reason = 'shutdown') {
-        console.log(`🛑 Closing ${this.#transports.size} transports...`);
-        this.emit('transports:closing', { count: this.#transports.size });
-        
-        const promises = [];
-        for (const [id] of this.#transports) {
-            promises.push(this.closeTransport(id, reason));
-        }
-        
-        await Promise.all(promises);
-        console.log('✅ All transports closed');
-        this.emit('transports:closed');
+    console.log(`🛑 Closing ${this.#transports.size} transports...`);
+    this.emit('transports:closing', { count: this.#transports.size });
+
+    const promises = [];
+    for (const [id] of this.#transports) {
+        promises.push(this.closeTransport(id, reason));
     }
+
+    await Promise.all(promises);
+    console.log('✅ All transports closed');
+    this.emit('transports:closed');
+}
 
     /**
      * Get transport stats
@@ -465,88 +467,88 @@ export class TransportManager extends EventEmitter {
      * @returns {Promise<Object>}
      */
     async getTransportStats(transportId) {
-        const transport = this.#transports.get(transportId);
-        if (!transport) {
-            throw new Error(`Transport ${transportId} not found`);
-        }
-
-        try {
-            const stats = await transport.getStats();
-            return stats;
-        } catch (error) {
-            console.error(`❌ Failed to get stats for transport ${transportId}:`, error.message);
-            throw error;
-        }
+    const transport = this.#transports.get(transportId);
+    if (!transport) {
+        throw new Error(`Transport ${transportId} not found`);
     }
 
-    /**
-     * Get all transport statuses
-     * @returns {Array<Object>}
-     */
-    getTransportStatuses() {
-        const result = [];
-        for (const [id, transport] of this.#transports) {
-            const metadata = this.#transportMetadata.get(id);
-            result.push({
-                id,
-                direction: metadata?.direction || 'unknown',
-                roomId: metadata?.roomId || 'unknown',
-                socketId: metadata?.socketId || 'unknown',
-                createdAt: metadata?.createdAt || new Date(),
-                iceState: transport.iceState,
-                dtlsState: transport.dtlsState,
-                sctpState: transport.sctpState,
-                closed: transport.closed,
-                alive: !transport.closed,
-            });
+    try {
+        const stats = await transport.getStats();
+        return stats;
+    } catch (error) {
+        console.error(`❌ Failed to get stats for transport ${transportId}:`, error.message);
+        throw error;
+    }
+}
+
+/**
+ * Get all transport statuses
+ * @returns {Array<Object>}
+ */
+getTransportStatuses() {
+    const result = [];
+    for (const [id, transport] of this.#transports) {
+        const metadata = this.#transportMetadata.get(id);
+        result.push({
+            id,
+            direction: metadata?.direction || 'unknown',
+            roomId: metadata?.roomId || 'unknown',
+            socketId: metadata?.socketId || 'unknown',
+            createdAt: metadata?.createdAt || new Date(),
+            iceState: transport.iceState,
+            dtlsState: transport.dtlsState,
+            sctpState: transport.sctpState,
+            closed: transport.closed,
+            alive: !transport.closed,
+        });
+    }
+    return result;
+}
+
+/**
+ * Health check
+ * @returns {Object}
+ */
+healthCheck() {
+    let healthy = true;
+    const details = [];
+
+    for (const [id, transport] of this.#transports) {
+        const isAlive = !transport.closed;
+        const iceState = transport.iceState;
+
+        if (!isAlive || iceState === 'failed' || iceState === 'disconnected') {
+            healthy = false;
         }
-        return result;
+
+        details.push({
+            id,
+            alive: isAlive,
+            iceState,
+            dtlsState: transport.dtlsState,
+        });
     }
 
-    /**
-     * Health check
-     * @returns {Object}
-     */
-    healthCheck() {
-        let healthy = true;
-        const details = [];
+    return {
+        healthy,
+        totalTransports: this.#transports.size,
+        details,
+        timestamp: new Date().toISOString(),
+    };
+}
 
-        for (const [id, transport] of this.#transports) {
-            const isAlive = !transport.closed;
-            const iceState = transport.iceState;
-            
-            if (!isAlive || iceState === 'failed' || iceState === 'disconnected') {
-                healthy = false;
-            }
-            
-            details.push({
-                id,
-                alive: isAlive,
-                iceState,
-                dtlsState: transport.dtlsState,
-            });
-        }
-
-        return {
-            healthy,
-            totalTransports: this.#transports.size,
-            details,
-            timestamp: new Date().toISOString(),
-        };
-    }
-
-    /**
-     * Update transport configuration
-     * @param {Object} config - New configuration
-     */
-    updateConfig(config = {}) {
-        this.#config = {
-            ...this.#config,
-            ...config
-        };
-        this.emit('config:updated', { config: this.#config });
-        console.log('📋 Transport config updated');
-    }
+/**
+ * Update transport configuration
+ * @param {Object} config - New configuration
+ */
+updateConfig(config = {}) {
+    this.#config = {
+        ...this.#config,
+        ...config
+    };
+    this.emit('config:updated', { config: this.#config });
+    console.log('📋 Transport config updated');
+}
 }
 
 // Export singleton instance (requires router)

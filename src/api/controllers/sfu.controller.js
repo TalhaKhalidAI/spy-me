@@ -3,7 +3,7 @@ import sfu from '../../services/mediasoup/index.js';
 import logger from '../utils/logger.js';
 import { catchAsync, sendSuccess } from '../utils/response.util.js';
 import { AppError } from '../middleware/error.middleware.js';
-import { prisma } from '../../config/databases.js';
+
 
 // ============================================================
 // ROOM MANAGEMENT
@@ -98,7 +98,7 @@ export const restartSFU = catchAsync(async (req, res, next) => {
     }
 });
 
- 
+
 
 /**
  * Get SFU status
@@ -270,8 +270,8 @@ export const getSFUHealth = catchAsync(async (req, res) => {
     const producerHealth = sfu.producerManager?.healthCheck?.() || { healthy: false };
     const consumerHealth = sfu.consumerManager?.healthCheck?.() || { healthy: false };
 
-    const isHealthy = sfu.isReady() && 
-        workerHealth.healthy !== false && 
+    const isHealthy = sfu.isReady() &&
+        workerHealth.healthy !== false &&
         transportHealth.healthy !== false &&
         producerHealth.healthy !== false &&
         consumerHealth.healthy !== false;
@@ -297,13 +297,19 @@ export const getSFUHealth = catchAsync(async (req, res) => {
  * Get router capabilities
  * GET /api/v1/sfu/capabilities
  */
-export const getCapabilities = catchAsync(async (req, res) => {
-    const capabilities = sfu.getRtpCapabilities();
+export const getCapabilities = catchAsync(async (req, res, next) => {
+    if (!sfu.isReady()) {
+        return next(new AppError('SFU not initialized', 503));
+    }
     
-    sendSuccess(res, 200, {
-        capabilities,
-        timestamp: new Date().toISOString(),
-    });
+    // In Mediasoup, typically you get the RTP capabilities from the router.
+    // If there is a main router or a way to get default capabilities:
+    const router = Array.from(sfu.routerManager?.routers?.values() || [])[0];
+    if (!router) {
+        return next(new AppError('No active routers found', 503));
+    }
+
+    sendSuccess(res, 200, router.rtpCapabilities);
 });
 
 /**
@@ -313,13 +319,13 @@ export const getCapabilities = catchAsync(async (req, res) => {
 export const resetSFU = catchAsync(async (req, res, next) => {
     // This is a dangerous operation - should be admin only
     // Check if admin role in your auth middleware
-    
+
     logger.warn('⚠️ SFU reset initiated by admin');
 
     try {
         // Shutdown everything
         await sfu.shutdown();
-        
+
         // Re-initialize
         await sfu.initialize({
             listenIp: '0.0.0.0',

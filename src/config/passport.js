@@ -45,11 +45,30 @@ passport.use(
 const jwtOptions = {
     jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
     secretOrKey: env.JWT_SECRET,
+    passReqToCallback: true,
 };
 
 passport.use(
-    new JwtStrategy(jwtOptions, async (payload, done) => {
+    new JwtStrategy(jwtOptions, async (req, payload, done) => {
         try {
+            // Restrict permanent WS tokens to ONLY specific SFU endpoints
+            if (payload.type === 'permanent') {
+                const basePath = req.originalUrl.split('?')[0];
+                
+                const isGetAllowed = req.method === 'GET' && (
+                    ['/api/v1/sfu/status', '/api/v1/sfu/stats', '/api/v1/sfu/health', '/api/v1/sfu/capabilities'].includes(basePath) ||
+                    basePath.match(/^\/api\/v1\/sfu\/rooms\/[^\/]+\/(producers|consumers)$/)
+                );
+                
+                const isDeleteAllowed = req.method === 'DELETE' && (
+                    basePath.match(/^\/api\/v1\/sfu\/(producers|consumers)\/[^\/]+$/)
+                );
+                
+                if (!isGetAllowed && !isDeleteAllowed) {
+                    return done(null, false, { message: 'Permanent tokens cannot access this API endpoint.' });
+                }
+            }
+
             const user = await prisma.user.findUnique({
                 where: { id: payload.sub },
                 include: { permissions: true }

@@ -82,14 +82,14 @@ class SFU {
         return this.router.rtpCapabilities;
     }
 
-    async createSendTransport(socketId, roomId) {
+    async createSendTransport(socketId, roomId, options = {}) {
         this.#checkReady();
-        return this.transportManager.createSendTransport(socketId, roomId);
+        return this.transportManager.createSendTransport(socketId, roomId, options);
     }
 
-    async createRecvTransport(socketId, roomId) {
+    async createRecvTransport(socketId, roomId, options = {}) {
         this.#checkReady();
-        return this.transportManager.createRecvTransport(socketId, roomId);
+        return this.transportManager.createRecvTransport(socketId, roomId, options);
     }
 
     async connectTransport(transportId, dtlsParameters) {
@@ -97,7 +97,7 @@ class SFU {
         return this.transportManager.connectTransport(transportId, dtlsParameters);
     }
 
-    async createProducer({ transportId, socketId, roomId, kind, rtpParameters, source }) {
+    async createProducer({ transportId, socketId, roomId, kind, rtpParameters, source, appData }) {
         this.#checkReady();
         return this.producerManager.createProducer({
             transportId,
@@ -106,10 +106,11 @@ class SFU {
             kind,
             rtpParameters,
             source: source || 'camera',
+            appData: appData || {},
         });
     }
 
-    async createConsumer({ transportId, socketId, roomId, producerId, rtpCapabilities }) {
+    async createConsumer({ transportId, socketId, roomId, producerId, rtpCapabilities, options }) {
         this.#checkReady();
         return this.consumerManager.createConsumer({
             transportId,
@@ -117,7 +118,7 @@ class SFU {
             roomId,
             producerId,
             rtpCapabilities,
-            options: { paused: true },
+            options: options || { paused: true },
         });
     }
 
