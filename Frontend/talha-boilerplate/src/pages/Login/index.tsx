@@ -85,21 +85,49 @@ function Login() {
 
   useEffect(() => {
     if (loginMutation.isSuccess && loginMutation.data) {
-      const { user } = loginMutation.data;
-      const u = (user || {}) as any;
-      
-      console.log('✅ Login success via cookie');
-      
+      console.log('🔥 RAW MUTATION DATA:', loginMutation.data);
+
+      // Robust recursive search for the token to handle any nested response structure
+      let finalToken = '';
+      const searchToken = (obj: any) => {
+        if (!obj || typeof obj !== 'object' || finalToken) return;
+
+        if (obj.accessToken && typeof obj.accessToken === 'string') {
+          finalToken = obj.accessToken;
+          return;
+        }
+        if (obj.access_token && typeof obj.access_token === 'string') {
+          finalToken = obj.access_token;
+          return;
+        }
+
+        Object.values(obj).forEach(val => {
+          if (val && typeof val === 'object') {
+            searchToken(val);
+          }
+        });
+      };
+      searchToken(loginMutation.data);
+
+      console.log('🔥 ROBUST FINAL TOKEN:', finalToken);
+
+      const payload = (loginMutation.data as any).data || (loginMutation.data as any);
+      const u = payload.user || payload;
+
+      console.log('✅ Login success via token');
+
       setAuth({
         id: String(u.id || u.user_id || ''),
         email: u.email || '',
         name: u.full_name || u.username || u.name || '',
-      });
-      
+        role: u.role || '',
+        permissions: u.permissions || [],
+      }, finalToken);
+
       toast.success(`Welcome ${u.full_name || u.username || 'back'}!`);
-      
+
       setTimeout(() => {
-        navigate('/talha/webrtc');
+        navigate('/sfu');
       }, 100);
     }
   }, [loginMutation.isSuccess, loginMutation.data, navigate, setAuth]);

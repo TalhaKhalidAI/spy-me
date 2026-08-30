@@ -66,6 +66,7 @@ export const login = catchAsync(async (req, res, next) => {
             email: req.user.email,
             username: req.user.username,
             role: req.user.role,
+            permissions: req.user.permissions,
         },
         ...tokens,
     });
@@ -81,6 +82,7 @@ export const getMe = catchAsync(async (req, res) => {
             firstName: req.user.firstName,
             lastName: req.user.lastName,
             avatar: req.user.avatar,
+            permissions: req.user.permissions,
         },
     });
 });

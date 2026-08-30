@@ -113,10 +113,11 @@ export const getRooms = catchAsync(async (req, res, next) => {
                     active: router ? !router.closed : false,
                     producers: producers.map(p => ({
                         id: p.id,
-                        kind: p.metadata?.kind,
-                        source: p.metadata?.source,
-                        socketId: p.metadata?.socketId,
-                        paused: p.metadata?.paused,
+                        kind: p.appData?.kind || p.metadata?.kind,
+                        source: p.appData?.source || p.metadata?.source,
+                        socketId: p.appData?.socketId || p.metadata?.socketId,
+                        paused: p.appData?.paused || p.metadata?.paused,
+                        clientName: p.appData?.clientName || p.metadata?.clientName || 'Unknown',
                     })),
                     consumers: consumers.map(c => ({
                         id: c.id,
@@ -137,16 +138,47 @@ export const getRooms = catchAsync(async (req, res, next) => {
     }
 
     // Fetch all rooms grouped by user
-    const dbRooms = await prisma.room.findMany();
+    const dbRooms = await prisma.room.findMany({
+        include: { user: true }
+    });
 
     const formattedResponse = {};
 
-    // Group roomIds by userId
+    // Group rooms by userId with full details
     for (const room of dbRooms) {
         if (!formattedResponse[room.userId]) {
-            formattedResponse[room.userId] = [];
+            formattedResponse[room.userId] = {};
         }
-        formattedResponse[room.userId].push(room.roomId);
+
+        const router = sfu.routerManager?.getRouter(room.roomId);
+        const producers = sfu.producerManager?.getProducersForRoom(room.roomId) || [];
+        const consumers = sfu.consumerManager?.getConsumersForRoom(room.roomId) || [];
+
+        formattedResponse[room.userId][room.roomId] = {
+            name: room.name,
+            description: room.description,
+            routerId: router?.id || null,
+            active: router ? !router.closed : false,
+            producers: producers.map(p => ({
+                id: p.id,
+                kind: p.appData?.kind || p.metadata?.kind,
+                source: p.appData?.source || p.metadata?.source,
+                socketId: p.appData?.socketId || p.metadata?.socketId,
+                paused: p.appData?.paused || p.metadata?.paused,
+                clientName: p.appData?.clientName || p.metadata?.clientName || 'Unknown',
+            })),
+            consumers: consumers.map(c => ({
+                id: c.id,
+                producerId: c.metadata?.producerId,
+                kind: c.metadata?.kind,
+                socketId: c.metadata?.socketId,
+                paused: c.metadata?.paused,
+            })),
+            stats: {
+                producerCount: producers.length,
+                consumerCount: consumers.length,
+            }
+        };
     }
 
     sendSuccess(res, 200, formattedResponse);

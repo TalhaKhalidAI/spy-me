@@ -143,11 +143,12 @@ export const getRoomProducers = catchAsync(async (req, res, next) => {
         roomId,
         producers: producers.map(p => ({
             id: p.id,
-            kind: p.metadata?.kind,
-            source: p.metadata?.source,
-            socketId: p.metadata?.socketId,
-            paused: p.metadata?.paused,
-            createdAt: p.metadata?.createdAt,
+            kind: p.appData?.kind || p.metadata?.kind,
+            source: p.appData?.source || p.metadata?.source,
+            socketId: p.appData?.socketId || p.metadata?.socketId,
+            paused: p.appData?.paused || p.metadata?.paused,
+            createdAt: p.appData?.createdAt || p.metadata?.createdAt,
+            clientName: p.appData?.clientName || p.metadata?.clientName || 'Unknown',
         })),
         total: producers.length,
     });

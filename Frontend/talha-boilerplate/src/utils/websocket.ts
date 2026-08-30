@@ -8,6 +8,7 @@ import { io, Socket, ManagerOptions, SocketOptions } from 'socket.io-client';
 
 export interface WebSocketConfig {
   url: string;
+  token?: string;
   options?: Partial<ManagerOptions & SocketOptions>;
   autoConnect?: boolean;
   reconnectionAttempts?: number;
@@ -192,6 +193,7 @@ export class WebSocketClient {
 
     this.socket = io(this.config.url, {
       ...this.config.options,
+      auth: this.config.token ? { token: this.config.token } : undefined,
       forceNew: true, // Guarantees a fresh socket ID and prevents internal manager caching loops
       reconnectionAttempts: this.config.reconnectionAttempts,
       reconnectionDelay: this.config.reconnectionDelay,

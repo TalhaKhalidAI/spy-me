@@ -1,6 +1,6 @@
 import { lazy } from "react"
 import { Navigate } from "react-router-dom"
-import { withGuest } from "@/HOCS/authHocCookies"
+import { withGuest, withAuth } from "@/HOCS/authHocCookies"
 
 const Login = lazy(() => import("../../pages/Login/index"))
 const Signup = lazy(() => import("../../pages/Signup/index"))
@@ -9,6 +9,7 @@ const Prs = lazy(() => import("../ProtectedRoute/Slice"))
 const SfuTets = lazy(() => import("../../pages/SfuTest/"))
 const GuestLogin = withGuest(Login)
 const GuestSignup = withGuest(Signup)
+const ProtectedSfuTest = withAuth(SfuTets)
 const SfuTestPaeg = lazy(() => import("../../pages/SfuClientTest"))
 export const routeSlice = [
   {
@@ -29,7 +30,7 @@ export const routeSlice = [
   },
   {
     path: "/sfu",
-    component: SfuTets,
+    component: ProtectedSfuTest,
   },
   {
     path: "/client",

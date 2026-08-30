@@ -92,9 +92,11 @@ function Signup() {
   // ✅ Handle success
   useEffect(() => {
     if (signupMutation.isSuccess && signupMutation.data) {
-      const { user } = signupMutation.data;
+      const payload = (signupMutation.data as any).data || (signupMutation.data as any);
+      const { user } = payload;
       
-      toast.success(`Welcome ${user.full_name}! Please login.`);
+      const name = user?.firstName || user?.username || 'User';
+      toast.success(`Welcome ${name}! Please login.`);
       
       // ✅ Navigate to login after successful signup
       setTimeout(() => {
@@ -127,12 +129,17 @@ function Signup() {
 
   const onSubmit = (data: SignupFormValues) => {
     // ✅ Map form fields to API fields
+    const nameParts = data.full_name.trim().split(' ');
+    const firstName = nameParts[0];
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+
     signupMutation.mutate({
       username: data.username,
       email: data.email,
       password: data.password,
-      full_name: data.full_name,
-    });
+      firstName,
+      lastName,
+    } as any);
   };
 
   return (

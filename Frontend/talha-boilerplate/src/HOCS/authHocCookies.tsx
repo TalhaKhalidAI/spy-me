@@ -19,23 +19,17 @@ export const withAuth = <P extends object>(
     useEffect(() => {
       let isMounted = true;
 
-      // If user already exists in store and is authenticated
-      if (user && isAuthenticated) {
-        setLoading(false);
-        return;
-      }
-
       const validateSession = async () => {
         try {
-          console.log('🔍 Validating cookie session via /users/me...');
+          console.log('🔍 Validating cookie session via /auth/me...');
 
-          const response = await http.get<any>('/users/me', {
+          const response = await http.get<any>('/auth/me', {
             skipToast: true,
           });
 
           console.log('✅ Session validated:', response);
 
-          const u = response?.user || response;
+          const u = response?.data?.user || response?.user || response?.data || response;
 
           if (u && (u.id || u.user_id || u.username || u.email)) {
             if (isMounted) {
@@ -43,7 +37,9 @@ export const withAuth = <P extends object>(
                 id: String(u.id || u.user_id || ''),
                 email: u.email || '',
                 name: u.full_name || u.username || u.name || '',
-              });
+                role: u.role || '',
+                permissions: u.permissions || [],
+              }, useAuthStore.getState().token || '');
             }
           } else {
             if (isMounted) {
@@ -129,18 +125,20 @@ export const withGuest = <P extends object>(
 
       const checkSession = async () => {
         try {
-          const response = await http.get<any>('/users/me', {
+          const response = await http.get<any>('/auth/me', {
             skipToast: true,
           });
 
-          const u = response?.user || response;
+          const u = response?.data?.user || response?.user || response?.data || response;
           if (u && (u.id || u.user_id || u.username || u.email)) {
             if (isMounted) {
               setAuth({
                 id: String(u.id || u.user_id || ''),
                 email: u.email || '',
                 name: u.full_name || u.username || u.name || '',
-              });
+                role: u.role || '',
+                permissions: u.permissions || [],
+              }, useAuthStore.getState().token || '');
               setIsLoggedIn(true);
             }
           } else {
@@ -172,7 +170,7 @@ export const withGuest = <P extends object>(
     useEffect(() => {
       if (!loading && isLoggedIn) {
         console.log('🔓 Already logged in, redirecting to dashboard');
-        navigate('/talha/webrtc', { replace: true });
+        navigate('/sfu', { replace: true });
       }
     }, [loading, isLoggedIn, navigate]);
 

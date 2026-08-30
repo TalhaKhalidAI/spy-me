@@ -419,8 +419,8 @@ io.on('connection', (socket) => {
                 rtpParameters,
                 source,
                 appData: {
-                    clientName: socket.user.username,
-                    role: socket.user.role
+                    clientName: socket.clientName || socket.user?.username || 'Unknown',
+                    role: socket.user?.role || 'user'
                 }
             });
 
@@ -430,6 +430,7 @@ io.on('connection', (socket) => {
                 socketId: socketId,
                 kind: kind,
                 source: source,
+                clientName: socket.clientName || socket.user?.username || 'Unknown',
             });
 
             if (callback) {
@@ -603,7 +604,11 @@ io.on('connection', (socket) => {
         const callback = extractCallback(...args);
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
         try {
-            const { roomId } = data;
+            const { roomId, clientName } = data;
+
+            if (clientName) {
+                socket.clientName = clientName;
+            }
 
             if (!roomId) {
                 throw new Error('roomId is required');

@@ -2,37 +2,33 @@ import { lazy } from "react"
 import { hocComponentCookies } from "@/HOCS/authHocCookies"
 import { Navigate } from "react-router-dom"
 
-const MainRoute = lazy(() => import("../../pages/MainPage/index"))
+const MainRoute = lazy(() => import("../../pages/SfuTest"))
 const ProtectedMainRoute = hocComponentCookies(MainRoute)
 const Wrtc = lazy(() => import("../../pages/TestRtc"))
-const WrtcP=hocComponentCookies(Wrtc)
+const WrtcP = hocComponentCookies(Wrtc)
 const LiveCallRoute = lazy(() => import("../../pages/LiveCall/index"))
-const Lcr=hocComponentCookies(LiveCallRoute)
-const WsTest2=lazy(()=>import("../../pages/RtcTest2/index"))
-const TpR2=hocComponentCookies(WsTest2)
+const Lcr = hocComponentCookies(LiveCallRoute)
+const WsTest2 = lazy(() => import("../../pages/RtcTest2/index"))
+const TpR2 = hocComponentCookies(WsTest2)
 export const routeSlice = [
   {
     path: "dashboard",
     component: ProtectedMainRoute,
   },
   {
-    path: "webrtc",
-    component: WrtcP,
-  },
-  {
     path: "live",
     component: Lcr,
   },
-   {
+  {
     path: "test2",
     component: TpR2,
   },
-    {
+  {
     path: "",
-    component: () => <Navigate to="/talha/webrtc" replace />,
+    component: () => <Navigate to="/sfu" replace />,
   },
   {
     path: "*",
-    component: () => <Navigate to="/talha/webrtc" replace />,
+    component: () => <Navigate to="/sfu" replace />,
   }
 ]

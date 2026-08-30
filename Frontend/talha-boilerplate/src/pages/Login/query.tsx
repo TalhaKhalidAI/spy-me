@@ -10,11 +10,8 @@ export const authKeys = {
 
 export const loginApi = async (data: LoginRequest): Promise<LoginResponse> => {
   const response = await apiHelper.post<LoginResponse, LoginRequest>(
-    "/users/login",
-    data,
-    {
-      params: { cookie_login: true },
-    }
+    "/auth/login",
+    data
   );
   return response;
 };

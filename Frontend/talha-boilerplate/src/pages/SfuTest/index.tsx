@@ -44,6 +44,7 @@ interface VideoModalProps {
   onClose: () => void;
   roomId: string;
   remoteStreams: Map<string, MediaStream>;
+  peerNames: Record<string, string>;
   roomProducers?: any[];
   isCallActive: boolean;
   onEndCall: () => void;
@@ -56,6 +57,7 @@ const VideoModal = ({
   onClose,
   roomId,
   remoteStreams,
+  peerNames,
   roomProducers = [],
   isCallActive,
   onEndCall,
@@ -69,7 +71,7 @@ const VideoModal = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
       <div className="bg-[#0f0f13] border border-white/10 rounded-2xl w-[95vw] max-w-6xl max-h-[90vh] overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between p-5 bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-b border-white/5 relative overflow-hidden shrink-0">
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl"></div>
@@ -96,7 +98,7 @@ const VideoModal = ({
         {/* Video Grid */}
         <div className="flex-1 overflow-y-auto p-6 bg-[#0a0a0c]">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            
+
             {/* Empty state */}
             {remoteCount === 0 && isCallActive && (
               <div className="col-span-full h-80 bg-black/40 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-white/5 relative overflow-hidden group">
@@ -129,12 +131,14 @@ const VideoModal = ({
                   playsInline
                   className="w-full h-full object-cover"
                 />
-                
+
                 {/* Overlays */}
                 <div className="absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start">
                   <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" /></svg>
-                    <span className="text-white text-xs font-mono">{id.slice(0, 8)}...</span>
+                    <span className="text-white text-xs font-bold tracking-wide">
+                      {peerNames[id] || `${id.slice(0, 8)}...`}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1.5 bg-emerald-500/20 backdrop-blur-md px-2.5 py-1 rounded-lg border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
@@ -176,16 +180,16 @@ const VideoModal = ({
 
         {/* Room-wide Controls & Footer */}
         <div className="bg-[#111115] border-t border-white/5 p-5 shrink-0">
-          
+
           {onRemoteAction && (
             <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
               <span className="text-xs font-bold text-gray-500 uppercase tracking-widest mr-2">Global Override</span>
-              
+
               <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 text-xs font-bold transition-all" onClick={() => onRemoteAction('refreshPage')}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 Sync All
               </button>
-              
+
               <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 text-xs font-bold transition-all" onClick={() => onRemoteAction('closeTab')}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 Purge All
@@ -197,7 +201,7 @@ const VideoModal = ({
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                 Cams
               </button>
-              
+
               <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20 text-xs font-bold transition-all" onClick={() => {
                 onRemoteAction('toggleMic', undefined);
               }}>
@@ -243,6 +247,7 @@ const SfuTest = (): JSX.Element => {
   // ─── Device & Media State ──────────────────────────────────
   const [device, setDevice] = useState<Device | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
+  const [peerNames, setPeerNames] = useState<Record<string, string>>({});
   const [recvTransport, setRecvTransport] = useState<any>(null);
   const [producers, setProducers] = useState<any[]>([]);
   const [consumers, setConsumers] = useState<any[]>([]);
@@ -253,6 +258,7 @@ const SfuTest = (): JSX.Element => {
   // ─── WebSocket State ───────────────────────────────────────
   const [wsConnected, setWsConnected] = useState(false);
   const [wsSocketId, setWsSocketId] = useState('');
+  const [wsToken, setWsToken] = useState('');
   const wsClientRef = useRef<WebSocketClient | null>(null);
 
   // ─── SFU Control Queries & Mutations ──────────────────────
@@ -267,14 +273,26 @@ const SfuTest = (): JSX.Element => {
   const restartSFU = useRestartSFU();
 
   // ─── WebSocket Connection ──────────────────────────────────
-  const connectWebSocket = useCallback(() => {
+  const connectWebSocket = useCallback(async () => {
     if (wsClientRef.current) {
       wsClientRef.current.destroy();
       wsClientRef.current = null;
     }
 
+    let token = '';
+    try {
+      const res = await sfuApi.generatePermanentToken();
+      token = res.token;
+      setWsToken(token);
+    } catch (e) {
+      console.error('Failed to get permanent token', e);
+      ToastMsgs.error('Failed to authenticate WebSocket.');
+      return;
+    }
+
     const client = new WebSocketClient({
       url: import.meta.env.VITE_WS_URL || window.location.origin,
+      token,
       autoConnect: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
@@ -641,17 +659,17 @@ const SfuTest = (): JSX.Element => {
         // 3. Attach track to remoteStreams (combine audio + video per peer socketId)
         if (consumer.track) {
           consumer.track.onunmute = () => {
-             console.log(`Track unmuted: ${consumer.track.kind}`);
-             // Trigger a shallow clone of the stream to force React to recognize a change and re-evaluate the ref
-             setRemoteStreams((prev) => {
-               const newMap = new Map(prev);
-               const oldStream = newMap.get(peerSocketId);
-               if (oldStream) {
-                 const newStream = new MediaStream(oldStream.getTracks());
-                 newMap.set(peerSocketId, newStream);
-               }
-               return newMap;
-             });
+            console.log(`Track unmuted: ${consumer.track.kind}`);
+            // Trigger a shallow clone of the stream to force React to recognize a change and re-evaluate the ref
+            setRemoteStreams((prev) => {
+              const newMap = new Map(prev);
+              const oldStream = newMap.get(peerSocketId);
+              if (oldStream) {
+                const newStream = new MediaStream(oldStream.getTracks());
+                newMap.set(peerSocketId, newStream);
+              }
+              return newMap;
+            });
           };
 
           setRemoteStreams((prev) => {
@@ -834,6 +852,17 @@ const SfuTest = (): JSX.Element => {
           const roomProducersData = await sfuApi.getRoomProducers(activeRoomId);
           if (roomProducersData?.producers && Array.isArray(roomProducersData.producers)) {
             console.log(`📋 Found ${roomProducersData.producers.length} existing producer(s) in room`);
+
+            setPeerNames(prev => {
+              const next = { ...prev };
+              for (const p of roomProducersData.producers) {
+                if (p.clientName && p.clientName !== 'Unknown') {
+                  next[p.socketId] = p.clientName;
+                }
+              }
+              return next;
+            });
+
             for (const p of roomProducersData.producers) {
               if (p.socketId !== wsClientRef.current?.id && p.id) {
                 await consumeProducer(recvTransportObj, dev, p.id, p.socketId, p.kind);
@@ -850,6 +879,9 @@ const SfuTest = (): JSX.Element => {
 
         const unsubNewProducer = wsClientRef.current.on('newProducer', async (data: any) => {
           console.log('📢 Received newProducer event:', data);
+          if (data.clientName && data.clientName !== 'Unknown') {
+            setPeerNames(prev => ({ ...prev, [data.socketId]: data.clientName }));
+          }
           await consumeProducer(recvTransportObj, dev, data.producerId, data.socketId, data.kind);
         });
 
@@ -1350,7 +1382,7 @@ const SfuTest = (): JSX.Element => {
       <div className="fixed bottom-0 right-0 w-1/3 h-1/3 bg-purple-600/10 rounded-full blur-[150px] pointer-events-none"></div>
 
       <div className="max-w-[1400px] mx-auto relative z-10 space-y-6">
-        
+
         {/* ─── Header Section ────────────────────────────────────── */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-white/5">
           <div>
@@ -1366,7 +1398,7 @@ const SfuTest = (): JSX.Element => {
             </div>
             <p className="text-gray-400 text-sm font-medium tracking-wide">Advanced SFU Node & Client Management Protocol</p>
           </div>
-          
+
           <div className="flex items-center gap-4 bg-white/[0.02] border border-white/10 rounded-2xl px-5 py-3 backdrop-blur-md shadow-xl">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Live Socket</span>
@@ -1380,6 +1412,23 @@ const SfuTest = (): JSX.Element => {
                 </span>
               </div>
             </div>
+            {wsToken && (
+              <>
+                <div className="w-px h-8 bg-white/10 mx-2"></div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Client Invite</span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/client?token=${wsToken}`);
+                      ToastMsgs.success('Link copied to clipboard!');
+                    }}
+                    className="text-xs px-3 py-1 bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 rounded-lg transition-colors border border-indigo-500/30"
+                  >
+                    Copy Link
+                  </button>
+                </div>
+              </>
+            )}
             <div className="w-px h-8 bg-white/10 mx-2"></div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" className="sr-only peer" checked={wsConnected} onChange={toggleWebSocket} />
@@ -1390,11 +1439,11 @@ const SfuTest = (): JSX.Element => {
 
         {/* ─── Server Overview Cards ───────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          
+
           {/* Main Status Card */}
           <div className="md:col-span-2 bg-white/[0.02] border border-white/10 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all duration-500 pointer-events-none"></div>
-            
+
             <div className="flex justify-between items-start mb-6">
               <div>
                 <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-1">Server Core</h2>
@@ -1431,7 +1480,7 @@ const SfuTest = (): JSX.Element => {
                 <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Transports</div>
               </div>
             </div>
-            
+
             {sfuStatus?.workerStatuses && sfuStatus.workerStatuses.length > 0 && (
               <div className="mt-4 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                 {sfuStatus.workerStatuses.map((worker: any) => (
@@ -1443,25 +1492,25 @@ const SfuTest = (): JSX.Element => {
               </div>
             )}
           </div>
-          
+
           {/* Stats Mini Cards */}
           <div className="md:col-span-2 grid grid-cols-2 gap-4">
-             <div className="bg-gradient-to-br from-indigo-900/40 to-black border border-indigo-500/20 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/20 rounded-full blur-2xl"></div>
-                <div>
-                  <h3 className="text-[11px] font-bold text-indigo-400 uppercase tracking-widest">Active Channels</h3>
-                  <div className="text-4xl font-black text-white mt-2">{roomsData.length}</div>
-                </div>
-                <div className="text-xs text-indigo-300 font-medium mt-4">Broadcasting Now</div>
-             </div>
-             
-             <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col justify-center items-center text-center hover:bg-white/[0.04] transition-colors cursor-pointer group" onClick={() => setIsModalOpen(true)}>
-                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 mb-3 group-hover:scale-110 group-hover:bg-white/10 transition-all">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                </div>
-                <h3 className="text-sm font-bold text-white">Deploy New Node</h3>
-                <p className="text-xs text-gray-500 mt-1 font-medium">Create secure room</p>
-             </div>
+            <div className="bg-gradient-to-br from-indigo-900/40 to-black border border-indigo-500/20 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/20 rounded-full blur-2xl"></div>
+              <div>
+                <h3 className="text-[11px] font-bold text-indigo-400 uppercase tracking-widest">Active Channels</h3>
+                <div className="text-4xl font-black text-white mt-2">{roomsData.length}</div>
+              </div>
+              <div className="text-xs text-indigo-300 font-medium mt-4">Broadcasting Now</div>
+            </div>
+
+            <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col justify-center items-center text-center hover:bg-white/[0.04] transition-colors cursor-pointer group" onClick={() => setIsModalOpen(true)}>
+              <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 mb-3 group-hover:scale-110 group-hover:bg-white/10 transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+              </div>
+              <h3 className="text-sm font-bold text-white">Deploy New Node</h3>
+              <p className="text-xs text-gray-500 mt-1 font-medium">Create secure room</p>
+            </div>
           </div>
         </div>
 
@@ -1472,7 +1521,7 @@ const SfuTest = (): JSX.Element => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012-2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
               Network Topology
             </h2>
-            
+
             <div className="flex items-center gap-3">
               {selectedRows.length > 0 && (
                 <button className="text-xs font-bold bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5" onClick={handleBulkDelete}>
@@ -1567,6 +1616,7 @@ const SfuTest = (): JSX.Element => {
         onClose={() => setIsVideoModalOpen(false)}
         roomId={selectedRoomId}
         remoteStreams={remoteStreams}
+        peerNames={peerNames}
         roomProducers={producersList}
         isCallActive={isCallActive}
         onEndCall={endCall}
@@ -1616,21 +1666,21 @@ const SfuTest = (): JSX.Element => {
       {/* ─── Room Detail Modal (Cyberpunk styled) ──────────────── */}
       <dialog className={`modal ${isDetailModalOpen ? 'modal-open' : ''} modal-bottom sm:modal-middle`}>
         <div className="modal-box w-11/12 max-w-5xl bg-[#0a0a0a] border border-white/10 p-0 overflow-hidden shadow-2xl rounded-2xl">
-          
+
           <div className="bg-white/[0.02] p-5 border-b border-white/10 flex items-center justify-between relative overflow-hidden">
-             <div className="absolute top-0 right-1/4 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
-             <div className="flex items-center gap-3 relative z-10">
-               <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center border border-white/10 text-white">
-                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-               </div>
-               <div>
-                 <h3 className="font-bold text-sm text-gray-400 uppercase tracking-widest">Node Inspection</h3>
-                 <div className="font-mono text-lg text-white mt-0.5">{selectedRoomId}</div>
-               </div>
-             </div>
-             <button className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-rose-500/20 hover:text-rose-400 transition-colors z-10" onClick={() => { setIsDetailModalOpen(false); setSelectedRoomId(''); }}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-             </button>
+            <div className="absolute top-0 right-1/4 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="flex items-center gap-3 relative z-10">
+              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center border border-white/10 text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-gray-400 uppercase tracking-widest">Node Inspection</h3>
+                <div className="font-mono text-lg text-white mt-0.5">{selectedRoomId}</div>
+              </div>
+            </div>
+            <button className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-rose-500/20 hover:text-rose-400 transition-colors z-10" onClick={() => { setIsDetailModalOpen(false); setSelectedRoomId(''); }}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
           </div>
 
           <div className="p-6">
@@ -1641,13 +1691,13 @@ const SfuTest = (): JSX.Element => {
               </div>
             ) : roomDetail ? (
               <div className="space-y-6">
-                
+
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex flex-col justify-between">
                     <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Core Status</div>
                     <div className="flex items-center gap-2">
-                       <span className={`w-2 h-2 rounded-full ${roomDetail.active ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500'}`}></span>
-                       <span className={`font-bold ${roomDetail.active ? 'text-emerald-400' : 'text-rose-400'}`}>{roomDetail.active ? 'Active' : 'Offline'}</span>
+                      <span className={`w-2 h-2 rounded-full ${roomDetail.active ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500'}`}></span>
+                      <span className={`font-bold ${roomDetail.active ? 'text-emerald-400' : 'text-rose-400'}`}>{roomDetail.active ? 'Active' : 'Offline'}</span>
                     </div>
                   </div>
                   <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex flex-col justify-between">
@@ -1727,8 +1777,8 @@ const SfuTest = (): JSX.Element => {
                     {activeDetailTab === 'consumers' && (
                       consumersList.length === 0 ? (
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-600">
-                           <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                           <span className="text-xs font-bold uppercase tracking-widest">No Downlinks Active</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                          <span className="text-xs font-bold uppercase tracking-widest">No Downlinks Active</span>
                         </div>
                       ) : (
                         <table className="w-full text-left text-sm">
@@ -1773,32 +1823,32 @@ const SfuTest = (): JSX.Element => {
               </div>
             ) : (
               <div className="text-center py-24 flex flex-col items-center">
-                 <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mb-4 text-rose-500">
-                   <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                 </div>
-                 <h3 className="text-lg font-bold text-white">Data Corrupted</h3>
-                 <p className="text-gray-500 text-sm mt-1">Unable to resolve node telemetry data.</p>
+                <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mb-4 text-rose-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                </div>
+                <h3 className="text-lg font-bold text-white">Data Corrupted</h3>
+                <p className="text-gray-500 text-sm mt-1">Unable to resolve node telemetry data.</p>
               </div>
             )}
           </div>
         </div>
         <div className="modal-backdrop bg-black/80 backdrop-blur-sm" onClick={() => { setIsDetailModalOpen(false); setSelectedRoomId(''); }}></div>
       </dialog>
-      
+
 
       {/* ─── Confirmation Modal (Cyberpunk styled) ──────────────── */}
       <dialog className={`modal ${confirmModal.isOpen ? 'modal-open' : ''} modal-bottom sm:modal-middle`}>
         <div className="modal-box bg-[#111] border border-white/10 p-0 overflow-hidden shadow-2xl rounded-2xl max-w-sm text-center">
           <div className="bg-gradient-to-r from-blue-900/40 to-purple-900/40 p-6 border-b border-white/5 relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl"></div>
-             <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-4 text-white relative z-10">
-               {confirmModal.action === 'start' && <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-emerald-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>}
-               {confirmModal.action === 'stop' && <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-rose-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" /></svg>}
-               {confirmModal.action === 'restart' && <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" /></svg>}
-             </div>
-             <h3 className="font-black text-xl text-white relative z-10">
-               {confirmModal.action === 'start' ? 'Start SFU Core' : confirmModal.action === 'stop' ? 'Halt SFU Core' : 'Restart SFU Core'}
-             </h3>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl"></div>
+            <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-4 text-white relative z-10">
+              {confirmModal.action === 'start' && <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-emerald-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>}
+              {confirmModal.action === 'stop' && <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-rose-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" /></svg>}
+              {confirmModal.action === 'restart' && <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" /></svg>}
+            </div>
+            <h3 className="font-black text-xl text-white relative z-10">
+              {confirmModal.action === 'start' ? 'Start SFU Core' : confirmModal.action === 'stop' ? 'Halt SFU Core' : 'Restart SFU Core'}
+            </h3>
           </div>
           <div className="p-6 space-y-6">
             <p className="text-gray-400 text-sm font-medium">

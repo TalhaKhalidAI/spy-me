@@ -24,6 +24,7 @@ interface Props { }
 const SfuTestPage = (_props: Props) => {
   // ─── State ──────────────────────────────────────────────────
   const [roomId, setRoomId] = useState<string>('');
+  const [clientName, setClientName] = useState<string>('');
   const [availableRooms, setAvailableRooms] = useState<any[]>([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
 
@@ -188,9 +189,9 @@ const SfuTestPage = (_props: Props) => {
   const joinRoom = useCallback(
     async (targetRoomId: string) => {
       if (!wsRef.current || !wsRef.current.isConnected) throw new Error('WebSocket not connected');
-      await wsRef.current.emitPromise('joinRoom', { roomId: targetRoomId });
+      await wsRef.current.emitPromise('joinRoom', { roomId: targetRoomId, clientName });
     },
-    []
+    [clientName]
   );
 
   // ─── Leave Call ──────────────────────────────────────────
@@ -458,8 +459,12 @@ const SfuTestPage = (_props: Props) => {
     try {
       if (wsRef.current?.connected) return;
 
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlToken = searchParams.get('token') || '';
+
       const ws = new WebSocketClient({
         url: import.meta.env.VITE_WS_URL || window.location.origin,
+        token: urlToken,
         autoConnect: true,
         reconnectionAttempts: 9999, // keep trying infinitely
         reconnectionDelay: 2000,
@@ -664,12 +669,25 @@ const SfuTestPage = (_props: Props) => {
               )}
             </div>
 
+            <div className="form-control relative">
+              <div className="flex justify-between items-center mb-2 px-1">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Client Name</span>
+              </div>
+              <input 
+                type="text" 
+                placeholder="Enter your name" 
+                value={clientName} 
+                onChange={(e) => setClientName(e.target.value)}
+                className="w-full h-14 bg-black/50 text-white border border-white/10 rounded-xl px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all font-medium"
+              />
+            </div>
+
             <button
-              className={`relative group w-full h-14 rounded-xl font-bold text-white uppercase tracking-widest overflow-hidden transition-all duration-300 ${!wsConnected || isLoadingCall || !roomId ? 'bg-white/5 text-gray-500 cursor-not-allowed border border-white/10' : 'border border-indigo-500/50 hover:border-indigo-400'}`}
+              className={`relative group w-full h-14 rounded-xl font-bold text-white uppercase tracking-widest overflow-hidden transition-all duration-300 ${!wsConnected || isLoadingCall || !roomId || !clientName ? 'bg-white/5 text-gray-500 cursor-not-allowed border border-white/10' : 'border border-indigo-500/50 hover:border-indigo-400'}`}
               onClick={() => establishDevice(roomId)}
-              disabled={!wsConnected || isLoadingCall || !roomId}
+              disabled={!wsConnected || isLoadingCall || !roomId || !clientName}
             >
-              {wsConnected && roomId && !isLoadingCall && (
+              {wsConnected && roomId && clientName && !isLoadingCall && (
                 <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-fuchsia-600 opacity-80 group-hover:opacity-100 transition-opacity"></div>
               )}
               

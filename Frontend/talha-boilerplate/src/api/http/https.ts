@@ -60,12 +60,14 @@ axiosRetry(axiosInstance, {
 })
 
 // ============================================
-// ✅ REQUEST INTERCEPTOR - COOKIE AUTH (NO TOKEN NEEDED)
+// ✅ REQUEST INTERCEPTOR - TOKEN AUTH
 // ============================================
 axiosInstance.interceptors.request.use(
   (config) => {
-    // ✅ Cookies are sent automatically with withCredentials: true
-    // No need to add Authorization header!
+    const token = useAuthStore.getState().token;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
 
     config.headers['X-Request-ID'] = crypto.randomUUID?.() || Date.now().toString();
     config.headers['X-App-Version'] = import.meta.env.VITE_APP_VERSION || '1.0.0';
@@ -74,7 +76,7 @@ axiosInstance.interceptors.request.use(
     console.log('📤 Request:', {
       url: config.url,
       method: config.method,
-      hasCredentials: true,
+      hasToken: !!token,
     });
 
     return config;
@@ -88,7 +90,10 @@ axiosInstance.interceptors.request.use(
 axiosInstance.interceptors.response.use(
   (response) => {
     // Success toasts
-    if (!response.config.skipToast) {
+    const url = response.config.url || '';
+    const isAuthRoute = url.includes('/auth/');
+    
+    if (!response.config.skipToast && !isAuthRoute) {
       const method = response.config.method?.toUpperCase()
       const successMessages: Record<string, string> = {
         'POST': 'Created successfully',
@@ -150,7 +155,8 @@ axiosInstance.interceptors.response.use(
 
       // ✅ Handle /users/me - treat 422 as session expired
       if (url.includes('/me')) {
-        if (!window.location.pathname.includes('/login')) {
+        const path = window.location.pathname;
+        if (!path.includes('/login') && !path.includes('/signup')) {
           handleLogout()
           ToastMsgs.error('Session expired. Please login again.')
         }
@@ -163,7 +169,8 @@ axiosInstance.interceptors.response.use(
       }
 
       // ✅ Any other 401/422 - session expired
-      if (!window.location.pathname.includes('/login')) {
+      const path = window.location.pathname;
+      if (!path.includes('/login') && !path.includes('/signup')) {
         handleLogout()
         ToastMsgs.error('Session expired. Please login again.')
       }
@@ -293,16 +300,17 @@ axiosInstance.interceptors.response.use(
 // )
 
 // ============================================
-// ✅ LOGOUT HELPER - Clears cookie
+// ✅ LOGOUT HELPER - Clears session
 // ============================================
 export const handleLogout = async () => {
   try {
-    await axiosInstance.post('/users/logout', {}, { skipToast: true });
+    await axiosInstance.post('/auth/logout', {}, { skipToast: true });
   } catch (err) {
     // Ignore error if session is already expired/invalid
   } finally {
     useAuthStore.getState().logout();
-    if (!window.location.pathname.includes('/login')) {
+    const path = window.location.pathname;
+    if (!path.includes('/login') && !path.includes('/signup')) {
       window.location.href = '/login';
     }
   }

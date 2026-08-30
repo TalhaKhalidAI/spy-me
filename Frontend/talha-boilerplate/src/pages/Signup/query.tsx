@@ -11,7 +11,7 @@ import type { SignupRequest, SignupResponse } from "./types";
 
 export const signupApi = async (data: SignupRequest): Promise<SignupResponse> => {
   const response = await apiHelper.post<SignupResponse, SignupRequest>(
-    "/users/signup",
+    "/auth/register",
     data
   );
   return response;
@@ -24,8 +24,9 @@ export const signupApi = async (data: SignupRequest): Promise<SignupResponse> =>
 export const useSignupMutation = () => {
   return useMutation({
     mutationFn: signupApi,
-    onSuccess: (data: SignupResponse) => {
-      console.log('✅ Signup successful:', data.user.username);
+    onSuccess: (data: any) => {
+      const payload = data.data || data;
+      console.log('✅ Signup successful:', payload?.user?.username);
     },
     onError: (error: any) => {
       const detail = error.response?.data?.detail;

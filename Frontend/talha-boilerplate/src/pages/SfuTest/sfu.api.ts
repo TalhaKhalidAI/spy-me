@@ -22,6 +22,8 @@ import type {
   ApiResponse,
 } from './types';
 
+import { useAuthStore } from '../../store/authStore';
+
 // ✅ Use relative path - Vite proxy will handle it
 const API_BASE = '/api/v1';
 
@@ -33,13 +35,21 @@ const apiClient = async <T>(
 ): Promise<T> => {
   const url = `${API_BASE}${endpoint}`;
   
+  const token = useAuthStore.getState().token;
+  console.log(`[apiClient] Fetching ${url} | Token exists?`, !!token);
+  
   try {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    };
+    
+    console.log(`[apiClient] Headers for ${url}:`, headers);
+
     const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
       ...options,
+      headers,
     });
 
     // ✅ Handle 503 (SFU not running) & 429 (Rate limited) gracefully
@@ -54,6 +64,19 @@ const apiClient = async <T>(
         return { consumers: [], total: 0 } as T;
       }
       return {} as T;
+    }
+
+    if (!response.ok) {
+      // Handle plain text errors like 'Unauthorized'
+      const errorText = await response.text();
+      let errorMessage = errorText;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.message || errorText;
+      } catch (e) {
+        // Not JSON, use raw text
+      }
+      throw new Error(`HTTP ${response.status}: ${errorMessage}`);
     }
 
     // ✅ Parse response
@@ -100,6 +123,12 @@ const apiClient = async <T>(
 // ─── SFU API ────────────────────────────────────────────────
 
 export const sfuApi = {
+  // ─── Auth ──────────────────────────────────────────────────
+  generatePermanentToken: (): Promise<{ token: string; message: string; note: string }> =>
+    apiClient('/auth/permanent-token', {
+      method: 'POST',
+    }),
+
   // ─── Status ──────────────────────────────────────────────
   getStatus: (): Promise<SFUStatus> =>
     apiClient('/sfu/status'),
@@ -107,8 +136,14 @@ export const sfuApi = {
   getStats: (): Promise<SFUStats> =>
     apiClient('/sfu/stats'),
 
-  getHealth: (): Promise<SFUHealth> =>
-    apiClient('/sfu/health'),
+  getHealth: async (): Promise<SFUHealth> => {
+    const url = '/health';
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error('Health check failed');
+    }
+    return response.json();
+  },
 
   getCapabilities: (): Promise<RtpCapabilities> =>
     apiClient('/sfu/capabilities'),
@@ -137,20 +172,65 @@ export const sfuApi = {
     }),
 
   // ─── Rooms ────────────────────────────────────────────────
-  getRooms: (): Promise<Room[]> =>
-    apiClient('/sfu/rooms'),
+  getRooms: async (): Promise<Room[]> => {
+    const data: any = await apiClient('/rooms');
+    
+    // Check if the backend returned the grouped format { "userId": ["room1", "room2"] }
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      if (data.rooms) return data.rooms;
+      if (data.data) return data.data;
+      
+      const rooms: Room[] = [];
+      Object.values(data).forEach((userRooms: any) => {
+        if (Array.isArray(userRooms)) {
+          // Fallback if backend still returns array of IDs
+          userRooms.forEach((id: string) => {
+            rooms.push({ id, roomId: id, name: id } as unknown as Room);
+          });
+        } else if (typeof userRooms === 'object') {
+          // Detailed format: { "roomId1": { name: "...", ... } }
+          Object.entries(userRooms).forEach(([roomId, details]: [string, any]) => {
+            rooms.push({
+              id: roomId,
+              roomId,
+              ...details
+            });
+          });
+        }
+      });
+      return rooms;
+    }
+    
+    return Array.isArray(data) ? data : [];
+  },
 
-  getRoom: (roomId: string): Promise<RoomDetail> =>
-    apiClient(`/sfu/rooms/${roomId}`),
+  getRoom: async (roomId: string): Promise<RoomDetail> => {
+    const rawData = await apiClient(`/rooms?id=${roomId}`);
+    // The backend returns `{ "USER_ID": { "roomId": { ...details } } }`
+    if (rawData && typeof rawData === 'object') {
+      for (const userId of Object.keys(rawData)) {
+        if (rawData[userId] && rawData[userId][roomId]) {
+          return rawData[userId][roomId] as RoomDetail;
+        }
+      }
+    }
+    return rawData as any;
+  },
 
   createRoom: (data: CreateRoomRequest): Promise<CreateRoomResponse> =>
-    apiClient('/sfu/rooms', {
+    apiClient('/rooms', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
+  updateRoom: (roomId: string, data: { name?: string; description?: string }): Promise<RoomDetail> =>
+    apiClient(`/rooms/${roomId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
   deleteRoom: (roomId: string): Promise<{ deleted: boolean }> =>
-    apiClient(`/sfu/rooms/${roomId}`, {
+    apiClient(`/rooms/${roomId}`, {
       method: 'DELETE',
     }),
 
