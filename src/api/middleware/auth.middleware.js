@@ -1,23 +1,24 @@
 import sfu from '../../services/mediasoup/index.js';
 import { prisma } from '../../config/databases.js';
+import { AppError } from './error.middleware.js';
 
 /**
  * Middleware to restrict access based on user roles
  * @param {...string} roles - Allowed roles
  */
 export const authorize = (...roles) => {
-    return (req, res, next) => {
-        // req.user is populated by passport
-        if (!req.user) {
-            return next(new AppError('You are not logged in', 401));
-        }
+  return (req, res, next) => {
+    // req.user is populated by passport
+    if (!req.user) {
+      return next(new AppError('You are not logged in', 401));
+    }
 
-        if (!roles.includes(req.user.role)) {
-            return next(new AppError('You do not have permission to perform this action', 403));
-        }
+    if (!roles.includes(req.user.role)) {
+      return next(new AppError('You do not have permission to perform this action', 403));
+    }
 
-        next();
-    };
+    next();
+  };
 };
 
 /**
@@ -25,24 +26,24 @@ export const authorize = (...roles) => {
  * @param {string} permission - The required permission name
  */
 export const requirePermission = (permission) => {
-    return (req, res, next) => {
-        if (!req.user) {
-            return next(new AppError('You are not logged in', 401));
-        }
+  return (req, res, next) => {
+    if (!req.user) {
+      return next(new AppError('You are not logged in', 401));
+    }
 
-        // Admin inherently has all permissions
-        if (req.user.role === 'ADMIN') {
-            return next();
-        }
+    // Admin inherently has all permissions
+    if (req.user.role === 'ADMIN') {
+      return next();
+    }
 
-        const userPermissions = req.user.permissions?.map(p => p.name) || [];
+    const userPermissions = req.user.permissions?.map(p => p.name) || [];
 
-        if (!userPermissions.includes(permission)) {
-            return next(new AppError(`You do not have the required permission: ${permission}`, 403));
-        }
+    if (!userPermissions.includes(permission)) {
+      return next(new AppError(`You do not have the required permission: ${permission}`, 403));
+    }
 
-        next();
-    };
+    next();
+  };
 };
 
 /**

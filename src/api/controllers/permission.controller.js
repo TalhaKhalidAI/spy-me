@@ -11,9 +11,7 @@ export const getAllPermissions = async (req, res, next) => {
     
     res.status(200).json({
       status: 'success',
-      data: {
-        permissions
-      }
+      data: permissions
     });
   } catch (error) {
     next(error);

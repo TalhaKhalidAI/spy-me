@@ -1,0 +1,12 @@
+import express from 'express';
+console.log("1. express loaded");
+import authRoutes from './src/api/routes/v1/auth.routes.js';
+console.log("2. authRoutes loaded");
+import userRoutes from './src/api/routes/v1/user.routes.js';
+console.log("3. userRoutes loaded");
+import permissionRoutes from './src/api/routes/v1/permission.routes.js';
+console.log("4. permissionRoutes loaded");
+import SFU_Router from './src/api/routes/v1/SFU_Router.js';
+console.log("5. SFU_Router loaded");
+import roomRoutes from './src/api/routes/v1/room.routes.js';
+console.log("6. roomRoutes loaded");

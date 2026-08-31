@@ -99,44 +99,23 @@ export const getUserPermissions = catchAsync(async (req, res, next) => {
     // Check both path param and query param
     const id = req.params.id || req.query.id;
 
-    let users = [];
-
     if (id) {
         const user = await prisma.user.findFirst({
             where: { id, deletedAt: null },
-            include: { permissions: true }
+            include: { permissions: true, rooms: true, grantedRooms: true }
         });
         if (!user) {
             return next(new AppError('User not found', 404));
         }
-        users = [user];
-    } else {
-        users = await prisma.user.findMany({
-            where: { deletedAt: null },
-            include: { permissions: true }
-        });
+        return sendSuccess(res, 200, user);
     }
 
-    // Format the response
-    let formattedData = {};
+    const users = await prisma.user.findMany({
+        where: { deletedAt: null },
+        include: { permissions: true, rooms: true, grantedRooms: true }
+    });
 
-    if (id && users.length === 1) {
-        const user = users[0];
-        formattedData[user.id] = {
-            username: user.username,
-            permissions: {}
-        };
-        for (const perm of user.permissions) {
-            formattedData[user.id].permissions[perm.id] = perm;
-        }
-    } else {
-        for (const user of users) {
-            // Just return an array of permission IDs for each user
-            formattedData[user.id] = user.permissions.map(perm => perm.id);
-        }
-    }
-
-    sendSuccess(res, 200, formattedData);
+    return sendSuccess(res, 200, users);
 });
 
 // Admin only: Add permissions to a user (without removing existing)
@@ -248,7 +227,7 @@ export const updateSinglePermission = catchAsync(async (req, res, next) => {
         return next(new AppError('newPermissionId is required', 400));
     }
 
-    const existingUser = await prisma.user.findUnique({ 
+    const existingUser = await prisma.user.findUnique({
         where: { id },
         include: { permissions: true }
     });
@@ -263,15 +242,15 @@ export const updateSinglePermission = catchAsync(async (req, res, next) => {
     }
 
     // Try finding the new permission by ID or by Name
-    const newPermission = await prisma.permission.findFirst({ 
-        where: { 
+    const newPermission = await prisma.permission.findFirst({
+        where: {
             OR: [
                 { id: newPermissionId },
                 { name: newPermissionId }
             ]
-        } 
+        }
     });
-    
+
     if (!newPermission) {
         return next(new AppError('New permission not found', 404));
     }
@@ -289,6 +268,67 @@ export const updateSinglePermission = catchAsync(async (req, res, next) => {
         });
 
         sendSuccess(res, 200, { user: updatedUser }, 'Permission updated successfully');
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Grant a room to a user
+ */
+export const addGrantedRoom = catchAsync(async (req, res, next) => {
+    const { id, roomId } = req.params;
+
+    const existingUser = await prisma.user.findUnique({ where: { id } });
+    if (!existingUser) {
+        return next(new AppError('User not found', 404));
+    }
+
+    const existingRoom = await prisma.room.findUnique({ where: { roomId } });
+    if (!existingRoom) {
+        return next(new AppError('Room not found', 404));
+    }
+
+    try {
+        const updatedUser = await prisma.user.update({
+            where: { id },
+            data: {
+                grantedRooms: {
+                    connect: { roomId }
+                }
+            },
+            include: { grantedRooms: true }
+        });
+
+        sendSuccess(res, 200, { user: updatedUser }, 'Room granted successfully');
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Revoke a granted room from a user
+ */
+export const removeGrantedRoom = catchAsync(async (req, res, next) => {
+    const { id, roomId } = req.params;
+
+    const existingUser = await prisma.user.findUnique({ where: { id } });
+    if (!existingUser) {
+        return next(new AppError('User not found', 404));
+    }
+
+    try {
+        const updatedUser = await prisma.user.update({
+            where: { id },
+            data: {
+                grantedRooms: {
+                    disconnect: { roomId }
+                }
+            },
+            include: { grantedRooms: true }
+        });
+
+        sendSuccess(res, 200, { user: updatedUser }, 'Room revoked successfully');
     } catch (error) {
         next(error);
     }

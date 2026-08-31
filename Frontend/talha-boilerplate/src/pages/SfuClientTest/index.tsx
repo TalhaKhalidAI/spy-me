@@ -35,8 +35,11 @@ const SfuTestPage = (_props: Props) => {
   const [roomId, setRoomId] = useState<string>('');
   const [clientName, setClientName] = useState<string>('');
   const [authError, setAuthError] = useState<string | null>(null);
+  // Token metadata extracted from the JWT (roomId scope, role, etc.)
+  const [tokenMeta, setTokenMeta] = useState<{ roomId?: string; role?: string; sub?: string } | null>(null);
   const [availableRooms, setAvailableRooms] = useState<any[]>([]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
+
 
   const [device, setDevice] = useState<Device | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -107,11 +110,20 @@ const SfuTestPage = (_props: Props) => {
         }
 
         // Valid URL token — inject into store + fetch with direct token
+        const meta = { roomId: decoded.roomId, role: decoded.role, sub: decoded.sub };
+        setTokenMeta(meta);
+
+        // If the token is scoped to a specific room, auto-select it immediately
+        if (decoded.roomId) {
+          setRoomId(decoded.roomId);
+        }
+
         useAuthStore.getState().setAuth(
           {
             id: decoded.sub || decoded.id || '',
             email: decoded.email || '',
             name: decoded.name || decoded.username || '',
+            role: decoded.role || '',
           },
           urlToken
         );
@@ -727,24 +739,36 @@ const SfuTestPage = (_props: Props) => {
           <div className="space-y-6">
             <div className="form-control relative">
               <div className="flex justify-between items-center mb-2 px-1">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Select Node</span>
-                <button 
-                  className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-wider flex items-center gap-1 group" 
-                  onClick={fetchRooms} 
-                  disabled={isLoadingRooms}
-                >
-                  {isLoadingRooms ? (
-                     <span className="loading loading-spinner loading-xs"></span>
-                  ) : (
-                    <>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 group-hover:rotate-180 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                      Sync
-                    </>
-                  )}
-                </button>
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  {tokenMeta?.roomId ? 'Assigned Node' : 'Select Node'}
+                </span>
+                {/* Only show sync button if room is NOT locked by token */}
+                {!tokenMeta?.roomId && (
+                  <button
+                    className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-wider flex items-center gap-1 group"
+                    onClick={() => fetchRooms()}
+                    disabled={isLoadingRooms}
+                  >
+                    {isLoadingRooms ? (
+                       <span className="loading loading-spinner loading-xs"></span>
+                    ) : (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 group-hover:rotate-180 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        Sync
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
 
-              {isLoadingRooms ? (
+              {/* If token is scoped to a room — show locked badge, no dropdown */}
+              {tokenMeta?.roomId ? (
+                <div className="h-14 flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl px-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
+                  <span className="text-indigo-300 font-bold text-sm flex-1 truncate">{tokenMeta.roomId}</span>
+                  <span className="text-xs text-indigo-500 uppercase tracking-widest font-bold">Locked</span>
+                </div>
+              ) : isLoadingRooms ? (
                 <div className="h-14 flex items-center justify-center bg-black/40 rounded-xl border border-white/10">
                   <span className="loading loading-bars loading-sm text-indigo-500"></span>
                 </div>
@@ -763,7 +787,7 @@ const SfuTestPage = (_props: Props) => {
                     <option value="" disabled className="bg-gray-900">Configure connection target...</option>
                     {availableRooms.map((room) => (
                       <option key={room.roomId || room.id || room.room_id} value={room.roomId || room.id || room.room_id} className="bg-gray-900 py-2">
-                        {room.roomId || room.id || room.room_id}
+                        {room.name || room.roomId || room.id || room.room_id}
                       </option>
                     ))}
                   </select>

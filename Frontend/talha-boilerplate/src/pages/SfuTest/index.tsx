@@ -14,13 +14,23 @@ import {
   useSFUStatus,
   useStartSFU,
   useStopSFU,
-  useRestartSFU
+  useRestartSFU,
+  useUsersList,
+  useAllPermissions,
+  useAssignPermission,
+  useRemovePermission,
+  useCreatePermission,
+  useUpdatePermission,
+  useDeletePermission,
+  useAddGrantedRoom,
+  useRemoveGrantedRoom
 } from './query';
 import { sfuApi } from './sfu.api';
 import { createRoomSchema, CreateRoomInput } from './schema';
 import { WebSocketClient } from '@/utils/websocket';
 import { Device } from 'mediasoup-client';
 import { ToastMsgs } from '@/api/toastUtils';
+import { useAuthStore, refreshUserSession } from '@/store/authStore';
 
 const getIceServers = () => {
   try {
@@ -64,6 +74,15 @@ const VideoModal = ({
   onReconnect,
   onRemoteAction
 }: VideoModalProps) => {
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'ADMIN';
+  
+  const hasPerm = (perm: string) => {
+    if (!user) return false;
+    if (user.role === 'ADMIN') return true;
+    return user.permissions?.some((p: any) => p.name === perm || p === perm) || false;
+  };
+
   if (!isOpen) return null;
 
   const remoteCount = remoteStreams.size;
@@ -150,23 +169,19 @@ const VideoModal = ({
                 {onRemoteAction && (
                   <div className="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex flex-col justify-center p-4 pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto">
                     <div className="grid grid-cols-2 gap-2 w-full max-w-xs mx-auto">
-                      <button className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-blue-500/20 hover:text-blue-400 text-gray-300 text-xs font-bold transition-colors border border-white/5" onClick={() => onRemoteAction('refreshPage', id)}>
+                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-blue-500/20 hover:text-blue-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.refresh') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.refresh')) { ToastMsgs.error('❌ Check permission: permission.peer.refresh'); return; } onRemoteAction('refreshPage', id); }}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                         Refresh
                       </button>
-                      <button className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-rose-500/20 hover:text-rose-400 text-gray-300 text-xs font-bold transition-colors border border-white/5" onClick={() => onRemoteAction('closeTab', id)}>
+                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-rose-500/20 hover:text-rose-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.kick') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.kick')) { ToastMsgs.error('❌ Check permission: permission.peer.kick'); return; } onRemoteAction('closeTab', id); }}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                         Kick
                       </button>
-                      <button className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-amber-500/20 hover:text-amber-400 text-gray-300 text-xs font-bold transition-colors border border-white/5" onClick={() => {
-                        onRemoteAction('toggleCamera', id);
-                      }}>
+                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-amber-500/20 hover:text-amber-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.cam') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.cam')) { ToastMsgs.error('❌ Check permission: permission.peer.cam'); return; } onRemoteAction('toggleCamera', id); }}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                         Cam
                       </button>
-                      <button className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-amber-500/20 hover:text-amber-400 text-gray-300 text-xs font-bold transition-colors border border-white/5" onClick={() => {
-                        onRemoteAction('toggleMic', id);
-                      }}>
+                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-amber-500/20 hover:text-amber-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.mic') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.mic')) { ToastMsgs.error('❌ Check permission: permission.peer.mic'); return; } onRemoteAction('toggleMic', id); }}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
                         Mic
                       </button>
@@ -185,26 +200,19 @@ const VideoModal = ({
             <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
               <span className="text-xs font-bold text-gray-500 uppercase tracking-widest mr-2">Global Override</span>
 
-              <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 text-xs font-bold transition-all" onClick={() => onRemoteAction('refreshPage')}>
+              <button className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-bold transition-all ${!isAdmin && !hasPerm('permission.peer.refresh') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500/20'}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.refresh')) { ToastMsgs.error('❌ Check permission: permission.peer.refresh'); return; } onRemoteAction('refreshPage'); }}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 Sync All
               </button>
-
-              <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 text-xs font-bold transition-all" onClick={() => onRemoteAction('closeTab')}>
+              <button className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-bold transition-all ${!isAdmin && !hasPerm('permission.peer.kick') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-rose-500/20'}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.kick')) { ToastMsgs.error('❌ Check permission: permission.peer.kick'); return; } onRemoteAction('closeTab'); }}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 Purge All
               </button>
-
-              <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20 text-xs font-bold transition-all" onClick={() => {
-                onRemoteAction('toggleCamera', undefined);
-              }}>
+              <button className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold transition-all ${!isAdmin && !hasPerm('permission.peer.cam') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-amber-500/20'}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.cam')) { ToastMsgs.error('❌ Check permission: permission.peer.cam'); return; } onRemoteAction('toggleCamera', undefined); }}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                 Cams
               </button>
-
-              <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20 text-xs font-bold transition-all" onClick={() => {
-                onRemoteAction('toggleMic', undefined);
-              }}>
+              <button className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold transition-all ${!isAdmin && !hasPerm('permission.peer.mic') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-amber-500/20'}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.mic')) { ToastMsgs.error('❌ Check permission: permission.peer.mic'); return; } onRemoteAction('toggleMic', undefined); }}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
                 Mics
               </button>
@@ -243,6 +251,34 @@ const SfuTest = (): JSX.Element => {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
   const [activeDetailTab, setActiveDetailTab] = useState<'producers' | 'consumers'>('producers');
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [selectedUserIdForPerms, setSelectedUserIdForPerms] = useState<string | null>(null);
+  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'permissions'>('users');
+  const [editingPermission, setEditingPermission] = useState<{ id?: string; name: string; description: string } | null>(null);
+
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'ADMIN';
+
+  const hasPerm = useCallback((perm: string) => {
+    if (!user) return false;
+    if (user.role === 'ADMIN') return true;
+    return user.permissions?.some((p: any) => p.name === perm || p === perm) || false;
+  }, [user]);
+
+  // ─── Auto-refresh permissions when the tab becomes visible ─
+  // This ensures that if admin assigns/revokes a permission mid-session,
+  // the normal user's UI updates the next time they switch back to this tab.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshUserSession();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    // Also refresh immediately on mount
+    refreshUserSession();
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
 
   // ─── Device & Media State ──────────────────────────────────
   const [device, setDevice] = useState<Device | null>(null);
@@ -1001,14 +1037,15 @@ const SfuTest = (): JSX.Element => {
   }, [selectedRoomId]);
 
   // ─── Room Queries & Mutations ─────────────────────────────
-  const {
-    data,
-    isLoading,
-    error,
-    refetch,
-    isFetching,
-    isSuccess
-  } = useRooms();
+  const { data = [], isLoading: isFetching, refetch, error } = useRooms();
+  const { data: usersData = [], isLoading: isUsersLoading } = useUsersList({ enabled: isAdmin && isUserModalOpen });
+  const { data: permissionsData = [] } = useAllPermissions({ enabled: isAdmin && isUserModalOpen });
+  
+  const assignPermission = useAssignPermission();
+  const removePermission = useRemovePermission();
+  const createPermission = useCreatePermission();
+  const updatePermission = useUpdatePermission();
+  const deletePermission = useDeletePermission();
 
   const {
     data: roomDetail,
@@ -1034,8 +1071,10 @@ const SfuTest = (): JSX.Element => {
     enabled: !!selectedRoomId,
   });
 
-  const deleteRoom = useDeleteRoom();
   const createRoom = useCreateRoom();
+  const deleteRoom = useDeleteRoom();
+  const addGrantedRoom = useAddGrantedRoom();
+  const removeGrantedRoom = useRemoveGrantedRoom();
   const forceCloseConsumer = useForceCloseConsumer();
   const forceCloseProducer = useForceCloseProducer();
 
@@ -1046,10 +1085,10 @@ const SfuTest = (): JSX.Element => {
   }, []);
 
   useEffect(() => {
-    if (isSuccess) {
+    if (data && Array.isArray(data)) {
       console.log('✅ Data loaded successfully:', data);
     }
-  }, [data, isSuccess]);
+  }, [data]);
 
   useEffect(() => {
     if (isDetailModalOpen && selectedRoomId) {
@@ -1339,6 +1378,206 @@ const SfuTest = (): JSX.Element => {
     { key: 'consumer', label: 'Consumers' },
   ], []);
 
+  const userColumns = useMemo(() => [
+    {
+      key: 'username',
+      label: 'User',
+      sortable: true,
+      searchable: true,
+      render: (value: string, row: any) => (
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold uppercase border border-indigo-500/30 text-xs shrink-0">
+            {row.username?.[0] || row.email?.[0] || '?'}
+          </div>
+          <div className="min-w-0">
+            <div className="font-bold text-white text-sm truncate">
+              {row.username || 'Unnamed'}
+            </div>
+            <div className="text-xs text-gray-400 mt-0.5 truncate">{row.email}</div>
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'role',
+      label: 'Role',
+      sortable: true,
+      render: (value: string) => (
+        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold tracking-wider ${value === 'ADMIN' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'}`}>
+          {value}
+        </span>
+      )
+    },
+    {
+      key: 'permissions',
+      label: 'Permissions',
+      render: (value: any, row: any) => (
+        <div className="flex flex-col gap-2 min-w-[200px]">
+          <div className="flex flex-wrap gap-1.5">
+            {row.permissions?.length > 0 ? row.permissions.map((p: any) => (
+              <div key={p.id} className="text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1.5 group transition-colors hover:bg-emerald-500/20">
+                {p.name}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); removePermission.mutate({ userId: row.id, permissionId: p.id }); }}
+                  className="opacity-0 group-hover:opacity-100 text-emerald-500 hover:text-rose-400 transition-all"
+                  title="Revoke"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                </button>
+              </div>
+            )) : (
+              <span className="text-[10px] text-gray-500 italic">None assigned</span>
+            )}
+          </div>
+          <select 
+            className="w-full bg-black border border-white/10 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer"
+            onChange={(e) => {
+              if (e.target.value) {
+                assignPermission.mutate({ userId: row.id, permissionId: e.target.value });
+                e.target.value = ''; // Reset
+              }
+            }}
+            defaultValue=""
+            onClick={(e) => e.stopPropagation()}
+          >
+            <option value="" disabled>+ Assign Permission</option>
+            {permissionsData?.filter((p: any) => !row.permissions?.find((up: any) => up.id === p.id)).map((p: any) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+      )
+    },
+    {
+      key: 'rooms',
+      label: 'Owned Rooms',
+      render: (value: any, row: any) => (
+        <div className="flex flex-col gap-2 min-w-[200px]">
+          <div className="flex flex-wrap gap-1.5">
+            {row.rooms?.length > 0 ? row.rooms.map((r: any) => (
+              <div key={r.id} className="text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded flex items-center gap-1.5 group transition-colors hover:bg-indigo-500/20">
+                {r.roomId}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); deleteRoom.mutate(r.roomId); }}
+                  className="opacity-0 group-hover:opacity-100 text-indigo-400 hover:text-rose-400 transition-all"
+                  title="Delete Room"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                </button>
+              </div>
+            )) : (
+              <span className="text-[10px] text-gray-500 italic">No rooms</span>
+            )}
+          </div>
+          <input 
+            type="text"
+            placeholder="+ Create Room ID"
+            className="w-full bg-black border border-white/10 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-indigo-500/50"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                createRoom.mutate({ roomId: e.currentTarget.value.trim(), userId: row.id } as any);
+                e.currentTarget.value = '';
+              }
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )
+    },
+    {
+      key: 'grantedRooms',
+      label: 'Granted Rooms',
+      render: (value: any, row: any) => (
+        <div className="flex flex-col gap-2 min-w-[200px]">
+          <div className="flex flex-wrap gap-1.5">
+            {row.grantedRooms?.length > 0 ? row.grantedRooms.map((r: any) => (
+              <div key={r.id} className="text-[10px] font-bold bg-teal-500/10 text-teal-400 border border-teal-500/20 px-2 py-0.5 rounded flex items-center gap-1.5 group transition-colors hover:bg-teal-500/20">
+                {r.roomId}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); removeGrantedRoom.mutate({ userId: row.id, roomId: r.roomId }); }}
+                  className="opacity-0 group-hover:opacity-100 text-teal-400 hover:text-rose-400 transition-all"
+                  title="Revoke Access"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                </button>
+              </div>
+            )) : (
+              <span className="text-[10px] text-gray-500 italic">No rooms granted</span>
+            )}
+          </div>
+          <select 
+            className="w-full bg-black border border-white/10 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-teal-500/50 cursor-pointer"
+            onChange={(e) => {
+              if (e.target.value) {
+                addGrantedRoom.mutate({ userId: row.id, roomId: e.target.value });
+                e.target.value = ''; // Reset
+              }
+            }}
+            defaultValue=""
+            onClick={(e) => e.stopPropagation()}
+          >
+            <option value="" disabled>+ Grant Room</option>
+            {roomsData?.filter((r: any) => !row.grantedRooms?.find((gr: any) => gr.roomId === r.room_id) && !row.rooms?.find((or: any) => or.roomId === r.room_id)).map((r: any) => (
+              <option key={r.room_id} value={r.room_id}>{r.room_id}</option>
+            ))}
+          </select>
+        </div>
+      )
+    }
+  ], [permissionsData, assignPermission, removePermission, createRoom, deleteRoom, addGrantedRoom, removeGrantedRoom, roomsData]);
+
+  const permissionColumns = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Permission Name',
+      sortable: true,
+      searchable: true,
+      render: (value: string, row: any) => (
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-sm font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">{row.name}</span>
+          <span className="text-[10px] text-gray-500 font-mono hidden sm:inline">ID: {row.id.slice(0, 8)}...</span>
+        </div>
+      )
+    },
+    {
+      key: 'description',
+      label: 'Description',
+      searchable: true,
+      render: (value: string, row: any) => (
+        <p className="text-gray-400 text-xs truncate max-w-[300px]" title={row.description}>
+          {row.description || 'No description provided.'}
+        </p>
+      )
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (value: any, row: any) => (
+        <div className="flex gap-2">
+          <button 
+            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-blue-500/20 text-gray-400 hover:text-blue-400 flex items-center justify-center transition-colors"
+            title="Edit Permission"
+            onClick={(e) => { e.stopPropagation(); setEditingPermission({ id: row.id, name: row.name, description: row.description || '' }); }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+          </button>
+          <button 
+            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 flex items-center justify-center transition-colors"
+            title="Delete Permission"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (window.confirm(`Are you sure you want to delete the permission "${row.name}"? This action cannot be undone.`)) {
+                deletePermission.mutate(row.id);
+              }
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          </button>
+        </div>
+      )
+    }
+  ], [setEditingPermission, deletePermission]);
+
   // ─── Handlers ──────────────────────────────────────────────
   const handleRowSelect = (row: any, checked: boolean) => {
     if (checked) {
@@ -1353,7 +1592,7 @@ const SfuTest = (): JSX.Element => {
   };
 
   // ─── Loading/Error States ─────────────────────────────────
-  if (isLoading || isStatusLoading) {
+  if (isFetching || isStatusLoading) {
     return (
       <div className="flex justify-center items-center h-64">
         <span className="loading loading-spinner loading-lg text-primary"></span>
@@ -1434,6 +1673,26 @@ const SfuTest = (): JSX.Element => {
               <input type="checkbox" className="sr-only peer" checked={wsConnected} onChange={toggleWebSocket} />
               <div className="w-11 h-6 bg-gray-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 border border-white/10"></div>
             </label>
+            <div className="w-px h-8 bg-white/10 mx-2"></div>
+            {/* Logout button */}
+            <button
+              id="logout-btn"
+              onClick={async () => {
+                try {
+                  const token = useAuthStore.getState().token;
+                  await fetch('/api/v1/auth/logout', {
+                    method: 'POST',
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                  });
+                } catch { /* ignore network errors */ }
+                useAuthStore.getState().logout();
+                window.location.href = '/login';
+              }}
+              className="flex items-center gap-2 text-xs px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 rounded-xl transition-all border border-rose-500/20 font-bold uppercase tracking-wider"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+              Logout
+            </button>
           </div>
         </div>
 
@@ -1454,15 +1713,21 @@ const SfuTest = (): JSX.Element => {
                 </div>
               </div>
               <div className="flex gap-2 relative z-10">
-                <button className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all text-emerald-400" onClick={handleStartSFU} disabled={sfuStatus?.initialized || startSFU.isPending} title="Start Server">
-                  {startSFU.isPending ? <span className="loading loading-spinner loading-xs"></span> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>}
-                </button>
-                <button className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all text-rose-400" onClick={handleStopSFU} disabled={!sfuStatus?.initialized || stopSFU.isPending} title="Stop Server">
-                  {stopSFU.isPending ? <span className="loading loading-spinner loading-xs"></span> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" /></svg>}
-                </button>
-                <button className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all text-blue-400" onClick={handleRestartSFU} disabled={!sfuStatus?.initialized || restartSFU.isPending} title="Restart Server">
-                  {restartSFU.isPending ? <span className="loading loading-spinner loading-xs"></span> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" /></svg>}
-                </button>
+                {hasPerm('permission.sfu.start') && (
+                  <button className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all text-emerald-400" onClick={handleStartSFU} disabled={sfuStatus?.initialized || startSFU.isPending} title="Start Server">
+                    {startSFU.isPending ? <span className="loading loading-spinner loading-xs"></span> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>}
+                  </button>
+                )}
+                {hasPerm('permission.sfu.stop') && (
+                  <button className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all text-rose-400" onClick={handleStopSFU} disabled={!sfuStatus?.initialized || stopSFU.isPending} title="Stop Server">
+                    {stopSFU.isPending ? <span className="loading loading-spinner loading-xs"></span> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" /></svg>}
+                  </button>
+                )}
+                {hasPerm('permission.sfu.restart') && (
+                  <button className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all text-blue-400" onClick={handleRestartSFU} disabled={!sfuStatus?.initialized || restartSFU.isPending} title="Restart Server">
+                    {restartSFU.isPending ? <span className="loading loading-spinner loading-xs"></span> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" /></svg>}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1504,12 +1769,38 @@ const SfuTest = (): JSX.Element => {
               <div className="text-xs text-indigo-300 font-medium mt-4">Broadcasting Now</div>
             </div>
 
-            <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col justify-center items-center text-center hover:bg-white/[0.04] transition-colors cursor-pointer group" onClick={() => setIsModalOpen(true)}>
-              <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 mb-3 group-hover:scale-110 group-hover:bg-white/10 transition-all">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+            <div className="grid grid-cols-2 gap-4">
+              <div
+                className={`bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col justify-center items-center text-center transition-colors group ${!isAdmin && !hasPerm('permission.room.create') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/[0.04] cursor-pointer'}`}
+                onClick={() => {
+                  if (!isAdmin && !hasPerm('permission.room.create')) {
+                    ToastMsgs.error('❌ Check permission: permission.room.create');
+                    return;
+                  }
+                  setIsModalOpen(true);
+                }}
+              >
+                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 mb-3 group-hover:scale-110 group-hover:bg-white/10 transition-all">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-white"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                </div>
+                <h3 className="text-sm font-bold text-white">Deploy Node</h3>
               </div>
-              <h3 className="text-sm font-bold text-white">Deploy New Node</h3>
-              <p className="text-xs text-gray-500 mt-1 font-medium">Create secure room</p>
+              
+              <div
+                className={`bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col justify-center items-center text-center transition-colors group ${!isAdmin && !hasPerm('permission.users.manage') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/[0.04] cursor-pointer'}`}
+                onClick={() => {
+                  if (!isAdmin && !hasPerm('permission.users.manage')) {
+                    ToastMsgs.error('❌ Check permission: permission.users.manage');
+                    return;
+                  }
+                  setIsUserModalOpen(true);
+                }}
+              >
+                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 mb-3 group-hover:scale-110 group-hover:bg-white/10 transition-all">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-emerald-400"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
+                </div>
+                <h3 className="text-sm font-bold text-white">Access Control</h3>
+              </div>
             </div>
           </div>
         </div>
@@ -1524,7 +1815,16 @@ const SfuTest = (): JSX.Element => {
 
             <div className="flex items-center gap-3">
               {selectedRows.length > 0 && (
-                <button className="text-xs font-bold bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5" onClick={handleBulkDelete}>
+                <button
+                  className={`text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${!isAdmin && !hasPerm('permission.room.delete') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-rose-500/20'}`}
+                  onClick={() => {
+                    if (!isAdmin && !hasPerm('permission.room.delete')) {
+                      ToastMsgs.error('❌ Check permission: permission.room.delete');
+                      return;
+                    }
+                    handleBulkDelete();
+                  }}
+                >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                   Purge ({selectedRows.length})
                 </button>
@@ -1562,7 +1862,13 @@ const SfuTest = (): JSX.Element => {
                     icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" /></svg>,
                     title: 'Monitor Feed',
                     variant: 'success',
-                    onClick: async (row) => await MakeCall(row?.room_id),
+                    onClick: async (row) => {
+                      if (!isAdmin && !hasPerm('permission.view.video')) {
+                        ToastMsgs.error('❌ Check permission: permission.view.video');
+                        return;
+                      }
+                      await MakeCall(row?.room_id);
+                    },
                   },
                   {
                     render: (row) => {
@@ -1570,9 +1876,13 @@ const SfuTest = (): JSX.Element => {
                       if (!isActive) return null;
                       return (
                         <button
-                          className="btn btn-ghost btn-xs text-rose-400 hover:bg-rose-500/20"
+                          className={`btn btn-ghost btn-xs text-rose-400 ${!isAdmin && !hasPerm('permission.room.delete') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-rose-500/20'}`}
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (!isAdmin && !hasPerm('permission.room.delete')) {
+                              ToastMsgs.error('❌ Check permission: permission.room.delete');
+                              return;
+                            }
                             handleDropRoomCall(row?.room_id);
                           }}
                           title="Terminate Connection"
@@ -1586,7 +1896,13 @@ const SfuTest = (): JSX.Element => {
                     icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
                     title: 'Purge Node',
                     variant: 'error',
-                    onClick: (row) => handleDeleteRoom(row?.room_id),
+                    onClick: (row) => {
+                      if (!isAdmin && !hasPerm('permission.room.delete')) {
+                        ToastMsgs.error('❌ Check permission: permission.room.delete');
+                        return;
+                      }
+                      handleDeleteRoom(row?.room_id);
+                    },
                   },
                   {
                     icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>,
@@ -1594,7 +1910,7 @@ const SfuTest = (): JSX.Element => {
                     variant: 'warning',
                     onClick: async (row) => await triggerRemoteRefresh(row?.room_id, row?.room_id),
                   },
-                ]}
+                ].filter(Boolean)}
               />
             ) : (
               <div className="text-center py-24 flex flex-col items-center">
@@ -1603,7 +1919,9 @@ const SfuTest = (): JSX.Element => {
                 </div>
                 <h3 className="text-lg font-bold text-gray-300">Topology Empty</h3>
                 <p className="text-gray-500 text-sm mt-1 mb-6">No nodes currently active on the network.</p>
-                <button className="px-6 py-2 rounded-xl bg-white text-black font-bold text-sm hover:bg-gray-200 transition-colors" onClick={() => setIsModalOpen(true)}>Initialize Node</button>
+                {isAdmin && (
+                  <button className="px-6 py-2 rounded-xl bg-white text-black font-bold text-sm hover:bg-gray-200 transition-colors" onClick={() => setIsModalOpen(true)}>Initialize Node</button>
+                )}
               </div>
             )}
           </div>
@@ -1722,7 +2040,6 @@ const SfuTest = (): JSX.Element => {
                 </div>
 
                 <div className="bg-black/40 border border-white/5 rounded-xl overflow-hidden min-h-[300px] relative">
-                  {/* Custom scrollable table container without standard daisy table classes to maintain dark aesthetic */}
                   <div className="overflow-x-auto w-full p-2">
                     {activeDetailTab === 'producers' && (
                       producersList.length === 0 ? (
@@ -1864,6 +2181,126 @@ const SfuTest = (): JSX.Element => {
           </div>
         </div>
         <div className="modal-backdrop bg-black/80 backdrop-blur-sm" onClick={() => setConfirmModal({ isOpen: false, action: null })}></div>
+      </dialog>
+
+      {/* ─── User Management Modal ───────────────────────────────── */}
+      <dialog className={`modal ${isUserModalOpen ? 'modal-open' : ''}`}>
+        <div className="modal-box bg-[#111] border border-white/10 p-0 overflow-hidden shadow-2xl rounded-2xl max-w-5xl w-11/12 max-h-[85vh] flex flex-col">
+          <div className="bg-black/40 px-6 py-4 border-b border-white/5 flex justify-between items-center sticky top-0 z-10 backdrop-blur-md">
+            <div>
+              <h3 className="font-black text-xl text-white tracking-tight flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                Access Control Directory
+              </h3>
+              <p className="text-gray-400 text-xs mt-1 font-medium uppercase tracking-widest">Manage User Permissions and View Shared Links</p>
+            </div>
+            <button className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-rose-500/20 hover:text-rose-400 transition-colors" onClick={() => setIsUserModalOpen(false)}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+            </button>
+          </div>
+          
+          <div className="flex border-b border-white/5 bg-[#111] px-6 pt-2">
+            <button 
+              className={`pb-3 px-4 text-sm font-bold border-b-2 transition-colors ${activeAdminTab === 'users' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+              onClick={() => setActiveAdminTab('users')}
+            >
+              Manage Users
+            </button>
+            <button 
+              className={`pb-3 px-4 text-sm font-bold border-b-2 transition-colors ${activeAdminTab === 'permissions' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+              onClick={() => setActiveAdminTab('permissions')}
+            >
+              Manage Permissions
+            </button>
+          </div>
+
+          <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+            {activeAdminTab === 'users' ? (
+              isUsersLoading ? (
+                <div className="flex justify-center items-center py-20">
+                  <span className="loading loading-spinner loading-lg text-emerald-500"></span>
+                </div>
+              ) : (
+              <div className="custom-dark-table">
+                <Table
+                  columns={userColumns}
+                  data={usersData || []}
+                  rowKey="id"
+                  showSearch
+                  showPagination
+                  itemsPerPage={5}
+                  zebra={false}
+                />
+              </div>
+              )
+            ) : (
+              <div className="flex flex-col h-full">
+                <div className="mb-6 bg-white/[0.02] border border-white/10 rounded-xl p-5">
+                  <h4 className="text-white font-bold mb-4">{editingPermission?.id ? 'Edit Permission' : 'Create New Permission'}</h4>
+                  <div className="flex gap-4 items-end">
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-400 mb-1 block">Permission Name</label>
+                      <input 
+                        type="text" 
+                        className="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                        placeholder="e.g., MANAGE_ROOMS"
+                        value={editingPermission?.name || ''}
+                        onChange={(e) => setEditingPermission(prev => ({ ...prev, name: e.target.value.toUpperCase() } as any))}
+                      />
+                    </div>
+                    <div className="flex-[2]">
+                      <label className="text-xs text-gray-400 mb-1 block">Description</label>
+                      <input 
+                        type="text" 
+                        className="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                        placeholder="Brief description of what this permission allows..."
+                        value={editingPermission?.description || ''}
+                        onChange={(e) => setEditingPermission(prev => ({ ...prev, description: e.target.value } as any))}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      {editingPermission?.id && (
+                        <button 
+                          className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white font-bold transition-colors"
+                          onClick={() => setEditingPermission(null)}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                      <button 
+                        className="px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={!editingPermission?.name}
+                        onClick={() => {
+                          if (editingPermission?.id) {
+                            updatePermission.mutate({ id: editingPermission.id, name: editingPermission.name, description: editingPermission.description });
+                          } else if (editingPermission?.name) {
+                            createPermission.mutate({ name: editingPermission.name, description: editingPermission.description });
+                          }
+                          setEditingPermission(null);
+                        }}
+                      >
+                        {editingPermission?.id ? 'Save Changes' : 'Create'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="custom-dark-table mt-4 flex-1 overflow-y-auto">
+                  <Table
+                    columns={permissionColumns}
+                    data={permissionsData || []}
+                    rowKey="id"
+                    showSearch
+                    showPagination
+                    itemsPerPage={5}
+                    zebra={false}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="modal-backdrop bg-black/80 backdrop-blur-sm" onClick={() => setIsUserModalOpen(false)}></div>
       </dialog>
 
       {/* Deep style overrides for generic Table component to enforce dark Cyberpunk aesthetic */}

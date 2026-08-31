@@ -53,6 +53,7 @@ export class WorkerManager extends EventEmitter {
      * @throws {Error} If worker creation fails
      */
     async createWorker(options = {}) {
+        console.log('DEBUG: createWorker called with options:', options);
         try {
             // Check max workers
             if (this.#workers.size >= this.#maxWorkers) {
@@ -75,11 +76,13 @@ export class WorkerManager extends EventEmitter {
             const requestedLevel = (options.logLevel || this.#logLevel || '').toLowerCase();
             const mediasoupLogLevel = validMediasoupLevels.includes(requestedLevel) ? requestedLevel : 'warn';
 
+            console.log('DEBUG: About to call mediasoup.createWorker with:', { logLevel: mediasoupLogLevel, rtcMinPort: minPort, rtcMaxPort: maxPort });
             const worker = await mediasoup.createWorker({
                 logLevel: mediasoupLogLevel,
                 rtcMinPort: minPort,
                 rtcMaxPort: maxPort,
             });
+            console.log('DEBUG: mediasoup.createWorker finished successfully');
 
             const pid = worker.pid;
             

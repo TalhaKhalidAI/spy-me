@@ -195,4 +195,22 @@ router.post(
     authController.generatePermanentToken
 );
 
+/**
+ * @swagger
+ * /v1/auth/logout:
+ *   post:
+ *     summary: Logout (client-side token invalidation)
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ */
+router.post(
+    '/logout',
+    passport.authenticate('jwt', { session: false, failWithError: false }),
+    authController.logout
+);
+
 export default router;

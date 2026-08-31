@@ -1,7 +1,7 @@
 import express from 'express';
 import passport from 'passport';
 import * as userController from '../../controllers/user.controller.js';
-import { authorize } from '../../middleware/auth.middleware.js';
+import { authorize, requirePermission } from '../../middleware/auth.middleware.js';
 import { validate } from '../../middleware/validate.middleware.js';
 import { updateUserSchema } from '../../validators/user.validator.js';
 
@@ -42,7 +42,7 @@ router.use((req, res, next) => {
  *       403:
  *         description: Forbidden
  */
-router.get('/', authorize('ADMIN'), userController.getAllUsers);
+router.get('/', requirePermission('permission.users.manage'), userController.getAllUsers);
 
 /**
  * @swagger
@@ -162,11 +162,11 @@ router.post('/restore/:id', authorize('ADMIN'), userController.restoreUser);
  *       200:
  *         description: List of all users and permissions
  */
-router.get('/permissions', authorize('ADMIN'), userController.getUserPermissions);
+router.get('/permissions', requirePermission('permission.users.manage'), userController.getUserPermissions);
 
 router.route('/:id/permissions')
-    .get(authorize('ADMIN'), userController.getUserPermissions)
-    .post(authorize('ADMIN'), userController.addPermissions);
+    .get(requirePermission('permission.users.manage'), userController.getUserPermissions)
+    .post(requirePermission('permission.users.manage'), userController.addPermissions);
 
 /**
  * @swagger
@@ -244,8 +244,32 @@ router.route('/:id/permissions')
  *         description: Permission removed successfully
  */
 router.route('/:id/permissions/:permissionId')
-    .post(authorize('ADMIN'), userController.addSinglePermission)
-    .put(authorize('ADMIN'), userController.updateSinglePermission)
-    .delete(authorize('ADMIN'), userController.removeSinglePermission);
+    .post(requirePermission('permission.users.manage'), userController.addSinglePermission)
+    .put(requirePermission('permission.users.manage'), userController.updateSinglePermission)
+    .delete(requirePermission('permission.users.manage'), userController.removeSinglePermission);
+
+
+/**
+ * @swagger
+ * /v1/users/{id}/granted-rooms/{roomId}:
+ *   post:
+ *     summary: Grant room access to a user (Admin only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/:id/granted-rooms/:roomId', requirePermission('permission.users.manage'), userController.addGrantedRoom);
+
+/**
+ * @swagger
+ * /v1/users/{id}/granted-rooms/{roomId}:
+ *   delete:
+ *     summary: Revoke room access from a user (Admin only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.delete('/:id/granted-rooms/:roomId', requirePermission('permission.users.manage'), userController.removeGrantedRoom);
 
 export default router;
+console.log("user.routes.js completed");

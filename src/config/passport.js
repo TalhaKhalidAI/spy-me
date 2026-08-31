@@ -73,6 +73,14 @@ passport.use(
                 if (!isGetAllowed && !isDeleteAllowed) {
                     return done(null, false, { message: 'Permanent tokens cannot access this API endpoint.' });
                 }
+
+                // If the token is scoped to a specific room, enforce it
+                if (payload.roomId) {
+                    const roomMatch = basePath.match(/^\/api\/v1\/sfu\/rooms\/([^\/]+)\//);
+                    if (roomMatch && roomMatch[1] !== payload.roomId) {
+                        return done(null, false, { message: 'This token is scoped to a different room.' });
+                    }
+                }
             }
 
             const user = await prisma.user.findUnique({

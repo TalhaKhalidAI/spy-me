@@ -28,6 +28,7 @@ import type {
   RtpCapabilities,
 } from './types';
 import { sfuApi } from './sfu.api';
+import { ToastMsgs } from '@/api/toastUtils';
 
 // ─── Query Keys ─────────────────────────────────────────────
 
@@ -41,7 +42,12 @@ export const sfuKeys = {
   room: (roomId: string) => [...sfuKeys.rooms(), roomId] as const,
   roomProducers: (roomId: string) => [...sfuKeys.room(roomId), 'producers'] as const,
   roomConsumers: (roomId: string) => [...sfuKeys.room(roomId), 'consumers'] as const,
+  
+  // Users & Permissions Keys
+  users: () => ['users'] as const,
+  permissions: () => ['permissions'] as const,
 };
+
 
 // ─── Query Hooks ────────────────────────────────────────────
 
@@ -171,6 +177,9 @@ export const useStartSFU = (
       queryClient.invalidateQueries({ queryKey: sfuKeys.stats() });
       queryClient.invalidateQueries({ queryKey: sfuKeys.health() });
     },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to start SFU');
+    },
     ...options,
   });
 };
@@ -188,6 +197,9 @@ export const useStopSFU = (
       queryClient.invalidateQueries({ queryKey: sfuKeys.health() });
       queryClient.invalidateQueries({ queryKey: sfuKeys.rooms() });
     },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to stop SFU');
+    },
     ...options,
   });
 };
@@ -202,6 +214,9 @@ export const useRestartSFU = (
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: sfuKeys.all });
     },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to restart SFU');
+    },
     ...options,
   });
 };
@@ -215,6 +230,9 @@ export const useResetSFU = (
     mutationFn: () => sfuApi.resetSFU(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: sfuKeys.all });
+    },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to reset SFU');
     },
     ...options,
   });
@@ -231,6 +249,9 @@ export const useCreateRoom = (
       queryClient.invalidateQueries({ queryKey: sfuKeys.rooms() });
       queryClient.invalidateQueries({ queryKey: sfuKeys.room(variables.roomId) });
     },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to create room');
+    },
     ...options,
   });
 };
@@ -246,6 +267,9 @@ export const useDeleteRoom = (
       queryClient.invalidateQueries({ queryKey: sfuKeys.rooms() });
       queryClient.removeQueries({ queryKey: sfuKeys.room(roomId) });
     },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to delete room');
+    },
     ...options,
   });
 };
@@ -260,6 +284,9 @@ export const useForceCloseProducer = (
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: sfuKeys.rooms() });
     },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to close producer');
+    },
     ...options,
   });
 };
@@ -273,6 +300,153 @@ export const useForceCloseConsumer = (
     mutationFn: (consumerId: string) => sfuApi.forceCloseConsumer(consumerId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: sfuKeys.rooms() });
+    },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to close consumer');
+    },
+    ...options,
+  });
+};
+
+// ─── Users & Permissions Hooks ─────────────────────────────────
+
+export const useUsersList = (options?: UseQueryOptions<any[], Error>) => {
+  return useQuery({
+    queryKey: sfuKeys.users(),
+    queryFn: () => sfuApi.getUsersWithPermissions(),
+    ...options,
+  });
+};
+
+export const useAllPermissions = (options?: UseQueryOptions<any[], Error>) => {
+  return useQuery({
+    queryKey: sfuKeys.permissions(),
+    queryFn: () => sfuApi.getAllPermissions(),
+    ...options,
+  });
+};
+
+export const useCreatePermission = (
+  options?: UseMutationOptions<any, Error, { name: string; description?: string }>
+) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data) => sfuApi.createPermission(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sfuKeys.permissions() });
+      ToastMsgs.success('Permission created successfully');
+    },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to create permission');
+    },
+    ...options,
+  });
+};
+
+export const useUpdatePermission = (
+  options?: UseMutationOptions<any, Error, { id: string; name: string; description?: string }>
+) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, ...data }) => sfuApi.updatePermission(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sfuKeys.permissions() });
+      ToastMsgs.success('Permission updated successfully');
+    },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to update permission');
+    },
+    ...options,
+  });
+};
+
+export const useDeletePermission = (
+  options?: UseMutationOptions<any, Error, string>
+) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id) => sfuApi.deletePermission(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sfuKeys.permissions() });
+      queryClient.invalidateQueries({ queryKey: sfuKeys.users() });
+      ToastMsgs.success('Permission deleted successfully');
+    },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to delete permission');
+    },
+    ...options,
+  });
+};
+
+export const useAssignPermission = (
+  options?: UseMutationOptions<any, Error, { userId: string; permissionId: string }>
+) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, permissionId }) => sfuApi.addPermissionToUser(userId, permissionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sfuKeys.users() });
+      ToastMsgs.success('Permission granted successfully');
+    },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to assign permission');
+    },
+    ...options,
+  });
+};
+
+export const useRemovePermission = (
+  options?: UseMutationOptions<any, Error, { userId: string; permissionId: string }>
+) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, permissionId }) => sfuApi.removePermissionFromUser(userId, permissionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sfuKeys.users() });
+      ToastMsgs.success('Permission revoked successfully');
+    },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to revoke permission');
+    },
+    ...options,
+  });
+};
+export const useAddGrantedRoom = (
+  options?: UseMutationOptions<any, Error, { userId: string; roomId: string }>
+) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, roomId }) => sfuApi.addGrantedRoom(userId, roomId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sfuKeys.users() });
+      ToastMsgs.success('Room access granted successfully');
+    },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to grant room access');
+    },
+    ...options,
+  });
+};
+
+export const useRemoveGrantedRoom = (
+  options?: UseMutationOptions<any, Error, { userId: string; roomId: string }>
+) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, roomId }) => sfuApi.removeGrantedRoom(userId, roomId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sfuKeys.users() });
+      ToastMsgs.success('Room access revoked successfully');
+    },
+    onError: (error) => {
+      ToastMsgs.error(error?.message || 'Failed to revoke room access');
     },
     ...options,
   });

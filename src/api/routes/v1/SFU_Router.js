@@ -159,7 +159,7 @@ SFU_Router.post('/restart', requirePermission('permission.sfu.restart'), sfuCont
  *       403:
  *         description: Forbidden
  */
-SFU_Router.get('/rooms/:roomId/producers', requirePermission('permission.view.uplink'), sfuController.getRoomProducers);
+SFU_Router.get('/rooms/:roomId/producers', requirePermission('permission.view.video'), sfuController.getRoomProducers);
 
 /**
  * @swagger
@@ -213,7 +213,7 @@ SFU_Router.get('/rooms/:roomId/producers', requirePermission('permission.view.up
  *       403:
  *         description: Forbidden
  */
-SFU_Router.get('/rooms/:roomId/consumers', requirePermission('permission.view.downlink'), sfuController.getRoomConsumers);
+SFU_Router.get('/rooms/:roomId/consumers', requirePermission('permission.view.video'), sfuController.getRoomConsumers);
 
 /**
  * @swagger

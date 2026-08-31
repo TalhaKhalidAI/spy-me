@@ -183,7 +183,8 @@ const createDefaultAdmin = async () => {
 };
 
 if (prisma) {
-  await createDefaultAdmin();
+  //await createDefaultAdmin();
+  console.log("DEBUG: createDefaultAdmin completed.");
 }
 
 process.on('SIGTERM', async () => {

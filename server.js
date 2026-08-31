@@ -1,3 +1,4 @@
+console.log("DEBUG: server.js started!");
 // server.js - FIXED VERSION
 
 import express from 'express';
@@ -24,7 +25,8 @@ import { randomUUID } from 'crypto';
 import sfu from './src/services/mediasoup/index.js';
 
 import { prisma } from './src/config/databases.js';
-import jwt from 'jsonwebtoken';
+import jwt from "jsonwebtoken";
+console.log("DEBUG: server.js line 30 executed");
 
 // Global error handling for promises and exceptions
 process.on('unhandledRejection', (reason, promise) => {
@@ -38,6 +40,7 @@ process.on('uncaughtException', (err) => {
     // process.exit(1);
 });
 
+console.log("DEBUG: server.js express created");
 const app = express();
 
 /**
@@ -245,7 +248,11 @@ io.use(async (socket, next) => {
         // Load the real user from the database
         const user = await prisma.user.findUnique({
             where: { id: decoded.sub },
-            include: { permissions: true }
+            include: { 
+                permissions: true,
+                rooms: true,
+                grantedRooms: true
+            }
         });
 
         if (!user || !user.isActive || user.deletedAt) {
@@ -258,6 +265,30 @@ io.use(async (socket, next) => {
         return next(new Error('Authentication error: Invalid token'));
     }
 });
+
+// Helper to verify if a user has access to a specific room
+const getAuthorizedRoomId = (data, socket) => {
+    const roomId = data?.roomId || socket.roomId;
+    if (socket.user.role === 'ADMIN') return roomId;
+    const isOwner = socket.user.rooms?.some(r => r.roomId === roomId);
+    const isGranted = socket.user.grantedRooms?.some(r => r.roomId === roomId);
+    if (!isOwner && !isGranted) {
+        throw new Error(`Forbidden: You do not have permission to access room ${roomId}`);
+    }
+    return roomId;
+};
+
+/**
+ * Check that the connected user (non-admin) has a specific permission.
+ * Admins always pass. Throws on failure — cannot be bypassed by frontend JS.
+ */
+const socketRequirePermission = (socket, permissionName) => {
+    if (socket.user.role === 'ADMIN') return; // Admins always allowed
+    const hasPermission = socket.user.permissions?.some(p => p.name === permissionName);
+    if (!hasPermission) {
+        throw new Error(`Forbidden: Missing permission '${permissionName}'`);
+    }
+};
 
 // ─── Socket.IO Connection Handler ────────────────────────────────────────────
 io.on('connection', (socket) => {
@@ -297,7 +328,7 @@ io.on('connection', (socket) => {
                 throw new Error('SFU not ready');
             }
 
-            const roomId = data?.roomId || socket.roomId || 'default-room';
+            const roomId = getAuthorizedRoomId(data, socket);
             const result = await sfu.createSendTransport(socketId, roomId, {
                 appData: {
                     clientName: socket.user.username,
@@ -331,7 +362,7 @@ io.on('connection', (socket) => {
                 throw new Error('SFU not ready');
             }
 
-            const roomId = data?.roomId || socket.roomId || 'default-room';
+            const roomId = getAuthorizedRoomId(data, socket);
             const result = await sfu.createRecvTransport(socketId, roomId, {
                 appData: {
                     clientName: socket.user.username,
@@ -398,7 +429,7 @@ io.on('connection', (socket) => {
                 kind,
                 rtpParameters,
                 source = 'camera',
-                roomId = socket.roomId || 'default-room'
+                roomId = getAuthorizedRoomId(data, socket)
             } = data;
 
             if (!transportId) {
@@ -459,7 +490,7 @@ io.on('connection', (socket) => {
                 transportId,
                 producerId,
                 rtpCapabilities,
-                roomId = socket.roomId || 'default-room'
+                roomId = getAuthorizedRoomId(data, socket)
             } = data;
 
             if (!transportId) {
@@ -604,14 +635,11 @@ io.on('connection', (socket) => {
         const callback = extractCallback(...args);
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
         try {
-            const { roomId, clientName } = data;
+            const roomId = getAuthorizedRoomId(data, socket);
+            const { clientName } = data;
 
             if (clientName) {
                 socket.clientName = clientName;
-            }
-
-            if (!roomId) {
-                throw new Error('roomId is required');
             }
 
             // 1. Verify the room actually exists in the Prisma Database
@@ -658,7 +686,9 @@ io.on('connection', (socket) => {
         const callback = extractCallback(...args);
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
         try {
-            const { roomId, targetSocketId } = data;
+            socketRequirePermission(socket, 'permission.peer.refresh');
+            const roomId = getAuthorizedRoomId(data, socket);
+            const { targetSocketId } = data;
 
             if (!roomId) {
                 throw new Error('roomId is required');
@@ -693,8 +723,9 @@ io.on('connection', (socket) => {
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
         try {
-            const { roomId, targetSocketId } = data;
-            if (!roomId) throw new Error('roomId is required');
+            socketRequirePermission(socket, 'permission.peer.kick');
+            const roomId = getAuthorizedRoomId(data, socket);
+            const { targetSocketId } = data;
 
             if (targetSocketId) {
                 socket.to(targetSocketId).emit('executeCommand', { command: 'closeTab' });
@@ -717,8 +748,9 @@ io.on('connection', (socket) => {
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
         try {
-            const { roomId, targetSocketId, enabled } = data;
-            if (!roomId) throw new Error('roomId is required');
+            socketRequirePermission(socket, 'permission.peer.cam');
+            const roomId = getAuthorizedRoomId(data, socket);
+            const { targetSocketId, enabled } = data;
 
             const command = {
                 command: 'toggleCamera',
@@ -746,8 +778,9 @@ io.on('connection', (socket) => {
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
         try {
-            const { roomId, targetSocketId, enabled } = data;
-            if (!roomId) throw new Error('roomId is required');
+            socketRequirePermission(socket, 'permission.peer.mic');
+            const roomId = getAuthorizedRoomId(data, socket);
+            const { targetSocketId, enabled } = data;
 
             const command = {
                 command: 'toggleMic',
@@ -775,8 +808,9 @@ io.on('connection', (socket) => {
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
         try {
-            const { roomId, targetSocketId } = data;
-            if (!roomId) throw new Error('roomId is required');
+            socketRequirePermission(socket, 'permission.peer.mic');
+            const roomId = getAuthorizedRoomId(data, socket);
+            const { targetSocketId } = data;
 
             if (targetSocketId) {
                 socket.to(targetSocketId).emit('executeCommand', {
@@ -805,8 +839,9 @@ io.on('connection', (socket) => {
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
         try {
-            const { roomId, targetSocketId } = data;
-            if (!roomId) throw new Error('roomId is required');
+            socketRequirePermission(socket, 'permission.peer.mic');
+            const roomId = getAuthorizedRoomId(data, socket);
+            const { targetSocketId } = data;
 
             if (targetSocketId) {
                 socket.to(targetSocketId).emit('executeCommand', {
@@ -837,8 +872,9 @@ io.on('connection', (socket) => {
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
         try {
-            const { roomId, targetSocketId } = data;
-            if (!roomId) throw new Error('roomId is required');
+            socketRequirePermission(socket, 'permission.peer.cam');
+            const roomId = getAuthorizedRoomId(data, socket);
+            const { targetSocketId } = data;
 
             if (targetSocketId) {
                 socket.to(targetSocketId).emit('executeCommand', {
@@ -869,8 +905,9 @@ io.on('connection', (socket) => {
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
 
         try {
-            const { roomId, targetSocketId } = data;
-            if (!roomId) throw new Error('roomId is required');
+            socketRequirePermission(socket, 'permission.peer.cam');
+            const roomId = getAuthorizedRoomId(data, socket);
+            const { targetSocketId } = data;
 
             if (targetSocketId) {
                 socket.to(targetSocketId).emit('executeCommand', {
@@ -912,6 +949,7 @@ io.on('connection', (socket) => {
 
 // ─── Start Server ─────────────────────────────────────────────────────────────
 const start = async () => {
+    console.log("DEBUG: start() function execution began!");
     try {
         // ✅ Initialize SFU first
         await sfu.initialize({
@@ -963,6 +1001,7 @@ const shutdown = async (signal) => {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
+console.log("DEBUG: calling start()");
 start();
 
 export default app;

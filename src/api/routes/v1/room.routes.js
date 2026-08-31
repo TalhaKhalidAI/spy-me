@@ -34,7 +34,7 @@ router.use(passport.authenticate('jwt', { session: false }));
  *       200:
  *         description: List of rooms
  */
-router.get('/', requirePermission('permission.room.view'), roomController.getRooms);
+router.get('/', roomController.getRooms);
 
 /**
  * @swagger

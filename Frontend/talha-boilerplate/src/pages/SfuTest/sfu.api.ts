@@ -34,17 +34,17 @@ const apiClient = async <T>(
   options?: RequestInit
 ): Promise<T> => {
   const url = `${API_BASE}${endpoint}`;
-  
+
   const token = useAuthStore.getState().token;
   console.log(`[apiClient] Fetching ${url} | Token exists?`, !!token);
-  
+
   try {
     const headers = {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     };
-    
+
     console.log(`[apiClient] Headers for ${url}:`, headers);
 
     const response = await fetch(url, {
@@ -81,13 +81,13 @@ const apiClient = async <T>(
 
     // ✅ Parse response
     const rawData = await response.json();
-    
+
     // ✅ Handle different response structures
     // Case 1: { status: 'success', data: [...] }
     // Case 2: { data: [...] }
     // Case 3: [...] (direct array)
     let data: T;
-    
+
     if (Array.isArray(rawData)) {
       // Direct array
       data = rawData as T;
@@ -106,16 +106,16 @@ const apiClient = async <T>(
     return data;
   } catch (error) {
     console.error(`API Error: ${endpoint}`, error);
-    
+
     // ✅ Return empty data on error for list endpoints
     if (endpoint.includes('/rooms') && !endpoint.includes('/rooms/')) {
       return [] as T;
     }
-    
+
     if (endpoint.includes('/health') || endpoint.includes('/stats') || endpoint.includes('/status')) {
       return {} as T;
     }
-    
+
     throw error;
   }
 };
@@ -174,12 +174,12 @@ export const sfuApi = {
   // ─── Rooms ────────────────────────────────────────────────
   getRooms: async (): Promise<Room[]> => {
     const data: any = await apiClient('/rooms');
-    
+
     // Check if the backend returned the grouped format { "userId": ["room1", "room2"] }
     if (data && typeof data === 'object' && !Array.isArray(data)) {
       if (data.rooms) return data.rooms;
       if (data.data) return data.data;
-      
+
       const rooms: Room[] = [];
       Object.values(data).forEach((userRooms: any) => {
         if (Array.isArray(userRooms)) {
@@ -200,7 +200,7 @@ export const sfuApi = {
       });
       return rooms;
     }
-    
+
     return Array.isArray(data) ? data : [];
   },
 
@@ -280,8 +280,56 @@ export const sfuApi = {
   getRoomConsumers: (roomId: string): Promise<ConsumerList> =>
     apiClient(`/sfu/rooms/${roomId}/consumers`),
 
-  forceCloseConsumer: (consumerId: string): Promise<{ closed: boolean }> =>
-    apiClient(`/sfu/consumers/${consumerId}`, {
+  forceCloseConsumer: (producerId: string): Promise<{ closed: boolean }> =>
+    apiClient(`/sfu/consumers/${producerId}`, {
+      method: 'DELETE',
+    }),
+
+  // ─── Users & Permissions ──────────────────────────────────
+  getUsersWithPermissions: (): Promise<any[]> =>
+    apiClient('/users/permissions', {
+      method: 'GET',
+    }),
+
+  getAllPermissions: (): Promise<any[]> =>
+    apiClient('/permissions', {
+      method: 'GET',
+    }),
+
+  createPermission: (data: { name: string; description?: string }): Promise<any> =>
+    apiClient('/permissions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updatePermission: (id: string, data: { name: string; description?: string }): Promise<any> =>
+    apiClient(`/permissions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  deletePermission: (id: string): Promise<any> =>
+    apiClient(`/permissions/${id}`, {
+      method: 'DELETE',
+    }),
+
+  addPermissionToUser: (userId: string, permissionId: string): Promise<any> =>
+    apiClient(`/users/${userId}/permissions/${permissionId}`, {
+      method: 'POST',
+    }),
+
+  removePermissionFromUser: (userId: string, permissionId: string): Promise<any> =>
+    apiClient(`/users/${userId}/permissions/${permissionId}`, {
+      method: 'DELETE',
+    }),
+
+  addGrantedRoom: (userId: string, roomId: string): Promise<any> =>
+    apiClient(`/users/${userId}/granted-rooms/${roomId}`, {
+      method: 'POST',
+    }),
+
+  removeGrantedRoom: (userId: string, roomId: string): Promise<any> =>
+    apiClient(`/users/${userId}/granted-rooms/${roomId}`, {
       method: 'DELETE',
     }),
 };

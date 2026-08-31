@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import passport from 'passport';
-import { authorize } from '../../middleware/auth.middleware.js';
+import { authorize, requirePermission } from '../../middleware/auth.middleware.js';
 import {
   getAllPermissions,
   createPermission,
+  updatePermission,
   deletePermission
 } from '../../controllers/permission.controller.js';
 
@@ -30,45 +31,11 @@ router.use((req, res, next) => {
         next();
     })(req, res, next);
 });
-router.use(authorize('ADMIN'));
-
-/**
- * @swagger
- * /v1/permissions:
- *   get:
- *     summary: Get all permissions (Admin only)
- *     tags: [Permissions]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of permissions
- *       403:
- *         description: Forbidden
- *   post:
- *     summary: Create a new permission (Admin only)
- *     tags: [Permissions]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *               description:
- *                 type: string
- *     responses:
- *       201:
- *         description: Permission created
- */
+// Only ADMIN can create/delete/update permissions — but listing is allowed for users.manage
 router
   .route('/')
-  .get(getAllPermissions)
-  .post(createPermission);
+  .get(requirePermission('permission.users.manage'), getAllPermissions)
+  .post(authorize('ADMIN'), createPermission);
 
 /**
  * @swagger
@@ -78,6 +45,7 @@ router
  */
 router
   .route('/:id')
-  .delete(deletePermission);
+  .put(authorize('ADMIN'), updatePermission)
+  .delete(authorize('ADMIN'), deletePermission);
 
 export default router;

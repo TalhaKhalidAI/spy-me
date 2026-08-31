@@ -32,7 +32,8 @@ model User {
   deletedAt     DateTime? // For soft delete
 
   permissions   Permission[]
-  rooms         Room[]
+  rooms         Room[]       @relation("OwnedRooms")
+  grantedRooms  Room[]       @relation("GrantedRooms")
 
   @@map("users")
 }
@@ -43,11 +44,22 @@ model Room {
   name        String?
   description String?
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User     @relation("OwnedRooms", fields: [userId], references: [id], onDelete: Cascade)
+  grantedToUsers User[]  @relation("GrantedRooms")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@map("rooms")
+}
+
+model RoomMember {
+  id        String   @id @default(uuid())
+  roomId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@unique([roomId, userId])
+  @@map("room_members")
 }
 
 model Permission {

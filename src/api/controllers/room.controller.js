@@ -9,7 +9,7 @@ import { prisma } from '../../config/databases.js';
  * POST /api/v1/rooms
  */
 export const createRoom = catchAsync(async (req, res, next) => {
-    const { roomId, name, description, options = {} } = req.body;
+    const { roomId, name, description, options = {}, userId } = req.body;
 
     if (!roomId) {
         return next(new AppError('roomId is required', 400));
@@ -26,7 +26,7 @@ export const createRoom = catchAsync(async (req, res, next) => {
             appData: {
                 name,
                 description,
-                createdBy: req.user.id
+                createdBy: userId || req.user.id
             }
         });
 
@@ -36,7 +36,7 @@ export const createRoom = catchAsync(async (req, res, next) => {
                 roomId,
                 name,
                 description,
-                userId: req.user.id
+                userId: userId || req.user.id
             }
         });
 
@@ -93,11 +93,22 @@ export const getRooms = catchAsync(async (req, res, next) => {
         // Fetch specific room
         const dbInfo = await prisma.room.findUnique({
             where: { roomId: id },
-            include: { user: true }
+            include: { 
+                user: true,
+                grantedToUsers: true
+            }
         });
 
         if (!dbInfo) {
             return next(new AppError('Room not found in database', 404));
+        }
+
+        if (req.user && req.user.role !== 'ADMIN') {
+            const isOwner = dbInfo.userId === req.user.id;
+            const isGranted = dbInfo.grantedToUsers.some(u => u.id === req.user.id);
+            if (!isOwner && !isGranted) {
+                return next(new AppError('You do not have permission to access this room', 403));
+            }
         }
 
         const router = sfu.routerManager?.getRouter(id);
@@ -138,9 +149,19 @@ export const getRooms = catchAsync(async (req, res, next) => {
     }
 
     // Fetch all rooms grouped by user
-    const dbRooms = await prisma.room.findMany({
+    const query = {
         include: { user: true }
-    });
+    };
+    if (req.user && req.user.role !== 'ADMIN') {
+        query.where = {
+            OR: [
+                { userId: req.user.id },
+                { grantedToUsers: { some: { id: req.user.id } } }
+            ]
+        };
+    }
+
+    const dbRooms = await prisma.room.findMany(query);
 
     const formattedResponse = {};
 
