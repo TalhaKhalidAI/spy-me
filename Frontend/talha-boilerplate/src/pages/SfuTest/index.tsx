@@ -137,8 +137,11 @@ const VideoModal = ({
             )}
 
             {/* Remote Videos */}
-            {Array.from(remoteStreams.entries()).map(([id, stream]) => (
-              <div key={id} tabIndex={0} className="group bg-black rounded-2xl overflow-hidden aspect-video relative border border-white/10 shadow-lg ring-1 ring-white/5 hover:ring-blue-500/50 focus:outline-none focus:ring-blue-500/50 transition-all cursor-pointer">
+            {Array.from(remoteStreams.entries()).map(([streamKey, stream]) => {
+              const peerSocketId = streamKey.split('-')[0];
+              const streamSource = streamKey.split('-')[1] || 'camera';
+              return (
+              <div key={streamKey} tabIndex={0} className="group bg-black rounded-2xl overflow-hidden aspect-video relative border border-white/10 shadow-lg ring-1 ring-white/5 hover:ring-blue-500/50 focus:outline-none focus:ring-blue-500/50 transition-all cursor-pointer">
                 <video
                   ref={(el) => {
                     if (el && el.srcObject !== stream) {
@@ -156,7 +159,7 @@ const VideoModal = ({
                   <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" /></svg>
                     <span className="text-white text-xs font-bold tracking-wide">
-                      {peerNames[id] || `${id.slice(0, 8)}...`}
+                      {peerNames[peerSocketId] || `${peerSocketId.slice(0, 8)}...`} {streamSource === 'screen' ? '(Screen)' : ''}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 bg-emerald-500/20 backdrop-blur-md px-2.5 py-1 rounded-lg border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
@@ -169,27 +172,33 @@ const VideoModal = ({
                 {onRemoteAction && (
                   <div className="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex flex-col justify-center p-4 pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto">
                     <div className="grid grid-cols-2 gap-2 w-full max-w-xs mx-auto">
-                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-blue-500/20 hover:text-blue-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.refresh') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.refresh')) { ToastMsgs.error('❌ Check permission: permission.peer.refresh'); return; } onRemoteAction('refreshPage', id); }}>
+                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-blue-500/20 hover:text-blue-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.refresh') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.refresh')) { ToastMsgs.error('❌ Check permission: permission.peer.refresh'); return; } onRemoteAction('refreshPage', peerSocketId); }}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                         Refresh
                       </button>
-                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-rose-500/20 hover:text-rose-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.kick') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.kick')) { ToastMsgs.error('❌ Check permission: permission.peer.kick'); return; } onRemoteAction('closeTab', id); }}>
+                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-rose-500/20 hover:text-rose-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.kick') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.kick')) { ToastMsgs.error('❌ Check permission: permission.peer.kick'); return; } onRemoteAction('closeTab', peerSocketId); }}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                         Kick
                       </button>
-                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-amber-500/20 hover:text-amber-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.cam') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.cam')) { ToastMsgs.error('❌ Check permission: permission.peer.cam'); return; } onRemoteAction('toggleCamera', id); }}>
+                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-amber-500/20 hover:text-amber-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.cam') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.cam')) { ToastMsgs.error('❌ Check permission: permission.peer.cam'); return; } onRemoteAction('toggleCamera', peerSocketId); }}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                         Cam
                       </button>
-                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-amber-500/20 hover:text-amber-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.mic') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.mic')) { ToastMsgs.error('❌ Check permission: permission.peer.mic'); return; } onRemoteAction('toggleMic', id); }}>
+                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-amber-500/20 hover:text-amber-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.mic') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.mic')) { ToastMsgs.error('❌ Check permission: permission.peer.mic'); return; } onRemoteAction('toggleMic', peerSocketId); }}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
                         Mic
                       </button>
+                      {(isAdmin || hasPerm('permission.peer.screen')) && (
+                        <button className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-emerald-500/20 hover:text-emerald-400 text-gray-300 text-xs font-bold transition-colors border border-white/5" onClick={() => onRemoteAction('toggleScreen', peerSocketId)}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                          Screen
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
               </div>
-            ))}
+            )})}
           </div>
         </div>
 
@@ -216,6 +225,12 @@ const VideoModal = ({
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
                 Mics
               </button>
+              {(isAdmin || hasPerm('permission.peer.screen')) && (
+                <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold transition-all hover:bg-emerald-500/20" onClick={() => onRemoteAction('toggleScreen', undefined)}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                  Screens
+                </button>
+              )}
 
             </div>
           )}
@@ -647,7 +662,8 @@ const SfuTest = (): JSX.Element => {
       dev: Device,
       producerId: string,
       peerSocketId: string,
-      kind?: string
+      kind: string,
+      source: string = 'camera'
     ) => {
       if (!recvTransportObj || !dev) {
         console.warn('⚠️ Receive transport or device not initialized');
@@ -696,35 +712,35 @@ const SfuTest = (): JSX.Element => {
         if (consumer.track) {
           consumer.track.onunmute = () => {
             console.log(`Track unmuted: ${consumer.track.kind}`);
-            // Trigger a shallow clone of the stream to force React to recognize a change and re-evaluate the ref
             setRemoteStreams((prev) => {
               const newMap = new Map(prev);
-              const oldStream = newMap.get(peerSocketId);
+              const streamKey = `${peerSocketId}-${source}`;
+              const oldStream = newMap.get(streamKey);
               if (oldStream) {
                 const newStream = new MediaStream(oldStream.getTracks());
-                newMap.set(peerSocketId, newStream);
+                newMap.set(streamKey, newStream);
               }
               return newMap;
             });
           };
 
           setRemoteStreams((prev) => {
+            const streamKey = `${peerSocketId}-${source}`;
             const newMap = new Map(prev);
-            let stream = newMap.get(peerSocketId);
+            let stream = newMap.get(streamKey);
             if (!stream) {
               stream = new MediaStream();
             }
-            // Remove existing track of same kind if replacing
             stream
               .getTracks()
               .filter((t) => t.kind === consumer.track.kind)
               .forEach((t) => stream!.removeTrack(t));
 
             stream.addTrack(consumer.track);
-            newMap.set(peerSocketId, stream);
+            newMap.set(streamKey, stream);
             return newMap;
           });
-          console.log(`🎥 Remote ${consumer.track.kind} track added for ${peerSocketId}`);
+          console.log(`🎥 Remote ${consumer.track.kind} track added for ${peerSocketId} (source: ${source})`);
         }
 
         setConsumers((prev) => [
@@ -900,6 +916,10 @@ const SfuTest = (): JSX.Element => {
             });
 
             for (const p of roomProducersData.producers) {
+              if (p.source === 'screen' && !isAdmin && !hasPerm('permission.view.screen')) {
+                console.log(`🚫 Ignoring screen producer ${p.id} due to lack of permission`);
+                continue;
+              }
               if (p.socketId !== wsClientRef.current?.id && p.id) {
                 await consumeProducer(recvTransportObj, dev, p.id, p.socketId, p.kind);
               }
@@ -915,6 +935,10 @@ const SfuTest = (): JSX.Element => {
 
         const unsubNewProducer = wsClientRef.current.on('newProducer', async (data: any) => {
           console.log('📢 Received newProducer event:', data);
+          if (data.source === 'screen' && !isAdmin && !hasPerm('permission.view.screen')) {
+             console.log('🚫 Ignoring new screen producer due to lack of permission');
+             return;
+          }
           if (data.clientName && data.clientName !== 'Unknown') {
             setPeerNames(prev => ({ ...prev, [data.socketId]: data.clientName }));
           }

