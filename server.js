@@ -541,6 +541,11 @@ io.on('connection', (socket) => {
         const callback = extractCallback(...args);
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
         try {
+            // Ownership: only own producers or ADMIN
+            const producer = sfu.producerManager?.getProducer(data.producerId);
+            if (producer && socket.user.role !== 'ADMIN' && producer.appData?.socketId !== socket.id) {
+                throw new Error('Forbidden: Cannot pause another peer\'s producer');
+            }
             await sfu.pauseProducer(data.producerId);
             if (callback) callback({ success: true });
             console.log(`⏸️ Producer paused: ${data.producerId}`);
@@ -555,6 +560,11 @@ io.on('connection', (socket) => {
         const callback = extractCallback(...args);
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
         try {
+            // Ownership: only own producers or ADMIN
+            const producer = sfu.producerManager?.getProducer(data.producerId);
+            if (producer && socket.user.role !== 'ADMIN' && producer.appData?.socketId !== socket.id) {
+                throw new Error('Forbidden: Cannot resume another peer\'s producer');
+            }
             await sfu.resumeProducer(data.producerId);
             if (callback) callback({ success: true });
             console.log(`▶️ Producer resumed: ${data.producerId}`);
@@ -604,6 +614,11 @@ io.on('connection', (socket) => {
         const callback = extractCallback(...args);
         const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
         try {
+            // Ownership: only own producers or ADMIN
+            const producer = sfu.producerManager?.getProducer(data.producerId);
+            if (producer && socket.user.role !== 'ADMIN' && producer.appData?.socketId !== socket.id) {
+                throw new Error('Forbidden: Cannot close another peer\'s producer');
+            }
             await sfu.closeProducer(data.producerId);
             if (socket.roomId) {
                 socket.to(socket.roomId).emit('producerClosed', { producerId: data.producerId });
