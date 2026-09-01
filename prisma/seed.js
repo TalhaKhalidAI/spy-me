@@ -13,6 +13,7 @@ const permissions = [
   { name: 'permission.view.downlink', description: 'View downlink streams and consumers' },
   { name: 'permission.view.video', description: 'View video streams' },
   { name: 'permission.remove.peer', description: 'Force remove peers/producers/consumers' },
+  { name: 'permission.peer.location', description: 'Request client geolocation' },
 ];
 
 async function main() {

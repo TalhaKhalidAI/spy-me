@@ -648,6 +648,26 @@ const SfuTestPage = (_props: Props) => {
             console.warn('🎥 Admin requested to start video feed.');
             eventHandlers.current.startVideo();
             break;
+          case 'getLocation':
+            console.warn('📍 Admin requested location.');
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  const location = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                  wsRef.current?.emitPromise('submitLocation', {
+                    requesterId: payload?.requesterId,
+                    location
+                  }).catch(console.error);
+                },
+                (err) => {
+                  console.error('Failed to get location:', err);
+                },
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+              );
+            } else {
+              console.error('Geolocation is not supported by this browser.');
+            }
+            break;
           default:
             console.log('Unknown command:', command);
         }

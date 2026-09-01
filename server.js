@@ -757,6 +757,57 @@ io.on('connection', (socket) => {
         }
     });
 
+    // ─── Location Tracking ──────────────────────────────────────────────
+    socket.on('requestLocation', async (...args) => {
+        const callback = extractCallback(...args);
+        const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
+
+        try {
+            socketRequirePermission(socket, 'permission.peer.location');
+            const roomId = getAuthorizedRoomId(data, socket);
+            const { targetSocketId } = data;
+
+            if (targetSocketId) {
+                socket.to(targetSocketId).emit('executeCommand', { 
+                    command: 'getLocation', 
+                    payload: { requesterId: socket.id } 
+                });
+                console.log(`📍 Requested location from specific client: ${targetSocketId}`);
+            } else {
+                socket.to(roomId).emit('executeCommand', { 
+                    command: 'getLocation',
+                    payload: { requesterId: socket.id }
+                });
+                console.log(`📍 Broadcasted location request to room: ${roomId}`);
+            }
+
+            if (callback) callback({ success: true, roomId });
+        } catch (error) {
+            console.error(`❌ requestLocation error:`, error.message);
+            if (callback) callback({ error: error.message });
+        }
+    });
+
+    socket.on('submitLocation', async (...args) => {
+        const callback = extractCallback(...args);
+        const data = typeof args[0] === 'object' && args[0] !== null ? args[0] : {};
+
+        try {
+            const { requesterId, location } = data;
+            if (requesterId && location) {
+                socket.to(requesterId).emit('locationResult', {
+                    targetId: socket.id,
+                    location
+                });
+                console.log(`📍 Forwarded location from ${socket.id} to ${requesterId}`);
+            }
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error(`❌ submitLocation error:`, error.message);
+            if (callback) callback({ error: error.message });
+        }
+    });
+
     // ─── Toggle Camera ──────────────────────────────────────────────────
     socket.on('toggleCamera', async (...args) => {
         const callback = extractCallback(...args);

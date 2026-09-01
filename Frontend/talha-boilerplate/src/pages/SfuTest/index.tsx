@@ -32,6 +32,37 @@ import { Device } from 'mediasoup-client';
 import { ToastMsgs } from '@/api/toastUtils';
 import { useAuthStore, refreshUserSession } from '@/store/authStore';
 
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { Icon } from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix Leaflet's default icon path issues with bundlers
+import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
+import iconUrl from 'leaflet/dist/images/marker-icon.png';
+import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+
+const customIcon = new Icon({
+  iconRetinaUrl,
+  iconUrl,
+  shadowUrl,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  tooltipAnchor: [16, -28],
+  shadowSize: [41, 41]
+});
+
+const MapBoundsUpdater = ({ locations }: { locations: Record<string, {lat: number, lng: number}> }) => {
+  const map = useMap();
+  useEffect(() => {
+    const locs = Object.values(locations);
+    if (locs.length > 0) {
+      const bounds = locs.map(loc => [loc.lat, loc.lng] as [number, number]);
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+    }
+  }, [locations, map]);
+  return null;
+};
 const getIceServers = () => {
   try {
     if (import.meta.env.VITE_ICE_SERVERS) {
@@ -55,6 +86,7 @@ interface VideoModalProps {
   roomId: string;
   remoteStreams: Map<string, MediaStream>;
   peerNames: Record<string, string>;
+  peerLocations: Record<string, { lat: number; lng: number }>;
   roomProducers?: any[];
   isCallActive: boolean;
   onEndCall: () => void;
@@ -68,6 +100,7 @@ const VideoModal = ({
   roomId,
   remoteStreams,
   peerNames,
+  peerLocations,
   roomProducers = [],
   isCallActive,
   onEndCall,
@@ -76,6 +109,7 @@ const VideoModal = ({
 }: VideoModalProps) => {
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'ADMIN';
+  const [activeTab, setActiveTab] = useState<'video' | 'location'>('video');
   
   const hasPerm = (perm: string) => {
     if (!user) return false;
@@ -114,11 +148,31 @@ const VideoModal = ({
           </div>
         </div>
 
-        {/* Video Grid */}
-        <div className="flex-1 overflow-y-auto p-6 bg-[#0a0a0c]">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Tabs */}
+        {(isAdmin || hasPerm('permission.peer.location')) && (
+          <div className="flex bg-[#0a0a0c] border-b border-white/5 px-6 pt-4 gap-4">
+            <button
+              onClick={() => setActiveTab('video')}
+              className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'video' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}`}
+            >
+              Video Feed
+            </button>
+            <button
+              onClick={() => setActiveTab('location')}
+              className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'location' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-gray-400 hover:text-white'}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              Live Locations
+            </button>
+          </div>
+        )}
 
-            {/* Empty state */}
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto p-6 bg-[#0a0a0c]">
+          {activeTab === 'video' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+              {/* Empty state */}
             {remoteCount === 0 && isCallActive && (
               <div className="col-span-full h-80 bg-black/40 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-white/5 relative overflow-hidden group">
                 <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -190,7 +244,48 @@ const VideoModal = ({
                 )}
               </div>
             ))}
-          </div>
+            </div>
+          ) : (
+            <div className="flex flex-col h-full space-y-6">
+              <div className="flex justify-end">
+                <button
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                  onClick={() => {
+                    if (onRemoteAction) onRemoteAction('requestLocation');
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  Refresh All Locations
+                </button>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {Object.keys(peerLocations).length === 0 ? (
+                  <div className="col-span-full h-80 bg-black/40 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-white/5">
+                    <p className="text-gray-500 text-sm">No locations available. Click 'Refresh All Locations' to ping clients.</p>
+                  </div>
+                ) : (
+                  <div className="col-span-full h-[600px] bg-black rounded-2xl overflow-hidden border border-white/10 shadow-lg relative z-0">
+                    <MapContainer center={[0, 0]} zoom={2} style={{ height: '100%', width: '100%' }}>
+                      <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      />
+                      {Object.entries(peerLocations).map(([id, loc]) => (
+                        <Marker key={id} position={[loc.lat, loc.lng]} icon={customIcon}>
+                          <Popup>
+                            <span className="font-bold text-gray-800">{peerNames[id] || `${id.slice(0, 8)}...`}</span>
+                            <br />
+                            <span className="text-xs text-gray-500">{loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</span>
+                          </Popup>
+                        </Marker>
+                      ))}
+                      <MapBoundsUpdater locations={peerLocations} />
+                    </MapContainer>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Room-wide Controls & Footer */}
@@ -284,6 +379,7 @@ const SfuTest = (): JSX.Element => {
   const [device, setDevice] = useState<Device | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
   const [peerNames, setPeerNames] = useState<Record<string, string>>({});
+  const [peerLocations, setPeerLocations] = useState<Record<string, { lat: number; lng: number }>>({});
   const [recvTransport, setRecvTransport] = useState<any>(null);
   const [producers, setProducers] = useState<any[]>([]);
   const [consumers, setConsumers] = useState<any[]>([]);
@@ -938,9 +1034,19 @@ const SfuTest = (): JSX.Element => {
             return newMap;
           });
           setConsumers((prev) => prev.filter((c) => c.socketId !== data.socketId));
+          setPeerLocations((prev) => {
+            const next = { ...prev };
+            delete next[data.socketId];
+            return next;
+          });
         });
 
-        unsubListenersRef.current = [unsubNewProducer, unsubProducerClosed, unsubClientLeft];
+        const unsubLocationResult = wsClientRef.current.on('locationResult', (data: any) => {
+          console.log('📍 Received locationResult event:', data);
+          setPeerLocations((prev) => ({ ...prev, [data.targetId]: data.location }));
+        });
+
+        unsubListenersRef.current = [unsubNewProducer, unsubProducerClosed, unsubClientLeft, unsubLocationResult];
 
         // ─── 8️⃣ Mark Call as Active & Open Modal ────────
         setIsCallActive(true);
@@ -1940,6 +2046,7 @@ const SfuTest = (): JSX.Element => {
         onEndCall={endCall}
         onReconnect={handleReconnect}
         onRemoteAction={sendRemoteAction}
+        peerLocations={peerLocations}
       />
 
       {/* ─── Create Room Modal (Cyberpunk styled) ──────────────── */}
