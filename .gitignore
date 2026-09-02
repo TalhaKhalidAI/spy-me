@@ -96,9 +96,7 @@ webpack-stats.json
 
 # Docker
 .dockerignore
-Dockerfile
-docker-compose*.yml
-docker-compose*.yaml
+ 
 
 # Uploaded files
 uploads/
