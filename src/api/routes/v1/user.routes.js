@@ -42,7 +42,7 @@ router.use((req, res, next) => {
  *       403:
  *         description: Forbidden
  */
-router.get('/', requirePermission('permission.users.manage'), userController.getAllUsers);
+router.get('/', authorize('ADMIN'), userController.getAllUsers);
 
 /**
  * @swagger
@@ -162,11 +162,11 @@ router.post('/restore/:id', authorize('ADMIN'), userController.restoreUser);
  *       200:
  *         description: List of all users and permissions
  */
-router.get('/permissions', requirePermission('permission.users.manage'), userController.getUserPermissions);
+router.get('/permissions', authorize('ADMIN'), userController.getUserPermissions);
 
 router.route('/:id/permissions')
-    .get(requirePermission('permission.users.manage'), userController.getUserPermissions)
-    .post(requirePermission('permission.users.manage'), userController.addPermissions);
+    .get(authorize('ADMIN'), userController.getUserPermissions)
+    .post(authorize('ADMIN'), userController.addPermissions);
 
 /**
  * @swagger
@@ -244,9 +244,9 @@ router.route('/:id/permissions')
  *         description: Permission removed successfully
  */
 router.route('/:id/permissions/:permissionId')
-    .post(requirePermission('permission.users.manage'), userController.addSinglePermission)
-    .put(requirePermission('permission.users.manage'), userController.updateSinglePermission)
-    .delete(requirePermission('permission.users.manage'), userController.removeSinglePermission);
+    .post(authorize('ADMIN'), userController.addSinglePermission)
+    .put(authorize('ADMIN'), userController.updateSinglePermission)
+    .delete(authorize('ADMIN'), userController.removeSinglePermission);
 
 
 /**
@@ -258,7 +258,7 @@ router.route('/:id/permissions/:permissionId')
  *     security:
  *       - bearerAuth: []
  */
-router.post('/:id/granted-rooms/:roomId', requirePermission('permission.users.manage'), userController.addGrantedRoom);
+router.post('/:id/granted-rooms/:roomId', authorize('ADMIN'), userController.addGrantedRoom);
 
 /**
  * @swagger
@@ -269,13 +269,13 @@ router.post('/:id/granted-rooms/:roomId', requirePermission('permission.users.ma
  *     security:
  *       - bearerAuth: []
  */
-router.delete('/:id/granted-rooms/:roomId', requirePermission('permission.users.manage'), userController.removeGrantedRoom);
+router.delete('/:id/granted-rooms/:roomId', authorize('ADMIN'), userController.removeGrantedRoom);
 
 /**
  * @swagger
  * /v1/users/{id}/password:
  *   put:
- *     summary: Update a user's password (Admin only)
+ *     summary: Update a user's password (Self or Admin)
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
@@ -306,7 +306,7 @@ router.delete('/:id/granted-rooms/:roomId', requirePermission('permission.users.
  *       '404':
  *         description: User not found
  */
-router.put('/:id/password', requirePermission('permission.users.manage'), userController.updateUserPassword);
+router.put('/:id/password', userController.updateUserPassword);
 
 export default router;
 console.log("user.routes.js completed");

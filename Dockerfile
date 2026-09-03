@@ -1,50 +1,61 @@
-# Backend/Dockerfile
-FROM node:20-bookworm-slim
+FROM node:20-slim
 
-# ─── Install build dependencies ────────────────────────────
+# Install ALL dependencies
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
+    python3-venv \
+    python3-full \
     make \
     g++ \
-    build-essential \
     openssl \
-    iputils-ping \
-    nano \
-    htop \
-    net-tools \
-    clang \
     git \
+    nano \
+    net-tools \
+    libtool \
+    autoconf \
+    automake \
+    pkg-config \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# ─── Set working directory ─────────────────────────────────
+# ✅ Create virtual environment and use it
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# ✅ Now pip works inside venv
+RUN pip install --upgrade pip setuptools wheel invoke
+
 WORKDIR /app
 
-# ─── Enable pnpm ────────────────────────────────────────────
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
-# ─── Copy package files ────────────────────────────────────
-COPY package.json package-lock.json* pnpm-lock.yaml* ./
+COPY package.json pnpm-lock.yaml* ./
 
-# ─── Install dependencies (builds mediasoup) ──────────────
 RUN pnpm install --no-frozen-lockfile
 
-# ─── ⚠️ CRITICAL: Build mediasoup worker manually ──────────
-RUN cd node_modules/mediasoup/worker && \
-    make CC=clang CXX=clang++ -j$(nproc) || \
-    make -j$(nproc)
+# ✅ Build mediasoup worker with venv python
+RUN cd node_modules/mediasoup && \
+    echo "🔨 Building mediasoup worker..." && \
+    PATH="/opt/venv/bin:$PATH" npm run build:worker || \
+    (cd worker && PATH="/opt/venv/bin:$PATH" make clean && PATH="/opt/venv/bin:$PATH" make -j$(nproc)) || \
+    echo "⚠️ Worker build failed"
 
-# ─── Copy Prisma schema ────────────────────────────────────
+# ✅ Verify worker exists
+RUN if [ -f /app/node_modules/mediasoup/worker/out/Release/mediasoup-worker ]; then \
+    echo "✅ Worker found!"; \
+    ls -la /app/node_modules/mediasoup/worker/out/Release/mediasoup-worker; \
+    else \
+    echo "❌ Worker still missing"; \
+    exit 1; \
+    fi
+
 COPY prisma ./prisma
 RUN npx prisma generate
 
-# ─── Copy application ──────────────────────────────────────
 COPY . .
 
-# ─── Expose ports ──────────────────────────────────────────
 EXPOSE 5050
 EXPOSE 20000-20200/udp
-EXPOSE 20000-20200/tcp
 
-# ─── Start application ─────────────────────────────────────
 CMD ["node", "server.js"]

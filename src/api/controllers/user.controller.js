@@ -334,13 +334,20 @@ export const removeGrantedRoom = catchAsync(async (req, res, next) => {
     }
 });
 
-// Admin only: Update a user's password
+// Self or Admin: Update a user's password
 export const updateUserPassword = catchAsync(async (req, res, next) => {
     const { id } = req.params;
     const { password } = req.body;
 
     if (!password) {
         return next(new AppError('Password is required', 400));
+    }
+
+    const isSelf = req.user.id === id;
+    const isAdmin = req.user.role === 'ADMIN';
+
+    if (!isSelf && !isAdmin) {
+        return next(new AppError('You do not have permission to update this user\'s password', 403));
     }
 
     const existingUser = await prisma.user.findUnique({ where: { id } });
