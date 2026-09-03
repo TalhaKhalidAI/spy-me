@@ -1,7 +1,7 @@
 import { prisma } from '../../config/databases.js';
 import { catchAsync, sendSuccess } from '../utils/response.util.js';
 import { AppError } from '../middleware/error.middleware.js';
-
+import { PasswordService } from '../../services/password.service.js';
 export const getAllUsers = catchAsync(async (req, res, next) => {
     const users = await prisma.user.findMany({
         where: { deletedAt: null }, // Only non-deleted users
@@ -332,6 +332,30 @@ export const removeGrantedRoom = catchAsync(async (req, res, next) => {
     } catch (error) {
         next(error);
     }
+});
+
+// Admin only: Update a user's password
+export const updateUserPassword = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!password) {
+        return next(new AppError('Password is required', 400));
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { id } });
+    if (!existingUser) {
+        return next(new AppError('User not found', 404));
+    }
+
+    const hashedPassword = await PasswordService.hash(password);
+
+    await prisma.user.update({
+        where: { id },
+        data: { password: hashedPassword },
+    });
+
+    sendSuccess(res, 200, null, 'Password updated successfully');
 });
 
 // (EOF)

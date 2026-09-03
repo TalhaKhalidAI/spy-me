@@ -271,5 +271,42 @@ router.post('/:id/granted-rooms/:roomId', requirePermission('permission.users.ma
  */
 router.delete('/:id/granted-rooms/:roomId', requirePermission('permission.users.manage'), userController.removeGrantedRoom);
 
+/**
+ * @swagger
+ * /v1/users/{id}/password:
+ *   put:
+ *     summary: Update a user's password (Admin only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - password
+ *             properties:
+ *               password:
+ *                 type: string
+ *     responses:
+ *       '200':
+ *         description: Password updated successfully
+ *       '400':
+ *         description: Bad request
+ *       '403':
+ *         description: Forbidden
+ *       '404':
+ *         description: User not found
+ */
+router.put('/:id/password', requirePermission('permission.users.manage'), userController.updateUserPassword);
+
 export default router;
 console.log("user.routes.js completed");
