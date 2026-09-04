@@ -34,6 +34,9 @@ COPY package.json pnpm-lock.yaml* ./
 
 RUN pnpm install --no-frozen-lockfile
 
+# ✅ FIX: Install the missing LibSQL adapter
+RUN pnpm add @prisma/adapter-libsql
+
 # ✅ Build mediasoup worker with venv python
 RUN cd node_modules/mediasoup && \
     echo "🔨 Building mediasoup worker..." && \
