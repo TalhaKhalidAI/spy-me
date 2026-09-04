@@ -10,10 +10,18 @@ const LiveCallRoute = lazy(() => import("../../pages/LiveCall/index"))
 const Lcr = hocComponentCookies(LiveCallRoute)
 const WsTest2 = lazy(() => import("../../pages/RtcTest2/index"))
 const TpR2 = hocComponentCookies(WsTest2)
+
+const AdminUsersRoute = lazy(() => import("../../pages/AdminUsers/index"))
+const ProtectedAdminUsers = hocComponentCookies(AdminUsersRoute)
+
 export const routeSlice = [
   {
     path: "dashboard",
     component: ProtectedMainRoute,
+  },
+  {
+    path: "admin/users",
+    component: ProtectedAdminUsers,
   },
   {
     path: "live",

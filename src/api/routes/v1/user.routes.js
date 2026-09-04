@@ -46,6 +46,20 @@ router.get('/', authorize('ADMIN'), userController.getAllUsers);
 
 /**
  * @swagger
+ * /v1/users:
+ *   post:
+ *     summary: Create a user (Admin only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       201:
+ *         description: User created successfully
+ */
+router.post('/', authorize('ADMIN'), userController.createUser);
+
+/**
+ * @swagger
  * /v1/users/update-me:
  *   patch:
  *     summary: Update current user profile
@@ -62,6 +76,9 @@ router.get('/', authorize('ADMIN'), userController.getAllUsers);
  *         description: Profile updated
  */
 router.patch('/update-me', validate(updateUserSchema), userController.updateMe);
+
+// Update a specific user (Admin only)
+router.patch('/:id', authorize('ADMIN'), userController.updateUser);
 
 /**
  * @swagger

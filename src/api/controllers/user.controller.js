@@ -3,8 +3,18 @@ import { catchAsync, sendSuccess } from '../utils/response.util.js';
 import { AppError } from '../middleware/error.middleware.js';
 import { PasswordService } from '../../services/password.service.js';
 export const getAllUsers = catchAsync(async (req, res, next) => {
+    const { search } = req.query;
+
+    const whereClause = { deletedAt: null };
+    if (search) {
+        whereClause.OR = [
+            { username: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } }
+        ];
+    }
+
     const users = await prisma.user.findMany({
-        where: { deletedAt: null }, // Only non-deleted users
+        where: whereClause, // Only non-deleted users matching search
         select: {
             id: true,
             email: true,
@@ -16,6 +26,32 @@ export const getAllUsers = catchAsync(async (req, res, next) => {
     });
 
     sendSuccess(res, 200, { users });
+});
+
+export const createUser = catchAsync(async (req, res, next) => {
+    const { username, email, password, role } = req.body;
+
+    const existing = await prisma.user.findFirst({
+        where: {
+            OR: [{ email }, { username }]
+        }
+    });
+
+    if (existing) {
+        return next(new AppError('User with this email or username already exists', 400));
+    }
+
+    const hashedPassword = await PasswordService.hash(password);
+    const user = await prisma.user.create({
+        data: {
+            username,
+            email,
+            password: hashedPassword,
+            role: role || 'USER'
+        }
+    });
+
+    sendSuccess(res, 201, { user: { id: user.id, username: user.username, email: user.email, role: user.role } }, 'User created successfully');
 });
 
 export const updateMe = catchAsync(async (req, res, next) => {
@@ -51,6 +87,61 @@ export const updateMe = catchAsync(async (req, res, next) => {
             avatar: updatedUser.avatar,
         }
     }, 'Profile updated successfully');
+});
+
+export const updateUser = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+    const { username, email, role, isActive } = req.body;
+
+    const userToUpdate = await prisma.user.findUnique({ where: { id } });
+    if (!userToUpdate) {
+        return next(new AppError('User not found', 404));
+    }
+
+    const updateData = {};
+
+    if (username !== undefined) {
+        if (username) {
+            const existing = await prisma.user.findUnique({ where: { username } });
+            if (existing && existing.id !== id) {
+                return next(new AppError('Username already taken', 400));
+            }
+        }
+        updateData.username = username;
+    }
+
+    if (email !== undefined) {
+        if (email) {
+            const existing = await prisma.user.findUnique({ where: { email } });
+            if (existing && existing.id !== id) {
+                return next(new AppError('Email already taken', 400));
+            }
+        }
+        updateData.email = email;
+    }
+
+    if (role !== undefined) {
+        updateData.role = role;
+    }
+
+    if (isActive !== undefined) {
+        updateData.isActive = isActive;
+    }
+
+    const updatedUser = await prisma.user.update({
+        where: { id },
+        data: updateData,
+    });
+
+    sendSuccess(res, 200, {
+        user: {
+            id: updatedUser.id,
+            email: updatedUser.email,
+            username: updatedUser.username,
+            role: updatedUser.role,
+            isActive: updatedUser.isActive,
+        }
+    }, 'User updated successfully');
 });
 
 export const deleteMe = catchAsync(async (req, res, next) => {

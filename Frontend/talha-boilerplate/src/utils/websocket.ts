@@ -2,7 +2,8 @@
 // WebSocket Helper with Reconnection & Typed Events
 // ============================================================
 
-import { io, Socket, ManagerOptions, SocketOptions } from 'socket.io-client';
+import { io, Socket } from 'socket.io-client';
+import type { ManagerOptions, SocketOptions } from 'socket.io-client';
 
 // ─── Configuration ──────────────────────────────────────────
 

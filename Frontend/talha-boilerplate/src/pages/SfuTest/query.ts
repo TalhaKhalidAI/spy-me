@@ -6,9 +6,8 @@ import {
   useQuery,
   useMutation,
   useQueryClient,
-  UseQueryOptions,
-  UseMutationOptions,
 } from '@tanstack/react-query';
+import type { UseQueryOptions, UseMutationOptions } from '@tanstack/react-query';
 import type {
   Room,
   RoomDetail,

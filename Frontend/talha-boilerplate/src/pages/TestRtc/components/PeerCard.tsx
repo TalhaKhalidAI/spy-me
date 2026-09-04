@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useCreatePeer, useDeletePeer, useTracks } from '../query';
-import { UseQueryResult } from '@tanstack/react-query';
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { Room, Peer } from '../types';
 
 import {

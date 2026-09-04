@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useNavigate } from 'react-router-dom';
+console.log("CACHE BUST 2");
+import { useUpdatePasswordMutation, useUpdateProfileMutation, useAdminUpdateUserMutation, useGetDeletedUsers, useDeleteMeMutation, useRestoreUserMutation, useCreateUserMutation } from '../AdminUsers/query';
 import Table from './components/Table';
 import {
   useRooms,
@@ -26,7 +29,7 @@ import {
   useRemoveGrantedRoom
 } from './query';
 import { sfuApi } from './sfu.api';
-import { createRoomSchema, CreateRoomInput } from './schema';
+import { createRoomSchema, type CreateRoomInput } from './schema';
 import { WebSocketClient } from '@/utils/websocket';
 import { Device } from 'mediasoup-client';
 import { ToastMsgs } from '@/api/toastUtils';
@@ -52,7 +55,7 @@ const customIcon = new Icon({
   shadowSize: [41, 41]
 });
 
-const MapBoundsUpdater = ({ locations }: { locations: Record<string, {lat: number, lng: number}> }) => {
+const MapBoundsUpdater = ({ locations }: { locations: Record<string, { lat: number, lng: number }> }) => {
   const map = useMap();
   useEffect(() => {
     const locs = Object.values(locations);
@@ -110,7 +113,7 @@ const VideoModal = ({
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'ADMIN';
   const [activeTab, setActiveTab] = useState<'video' | 'location'>('video');
-  
+
   const hasPerm = (perm: string) => {
     if (!user) return false;
     if (user.role === 'ADMIN') return true;
@@ -173,77 +176,77 @@ const VideoModal = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
               {/* Empty state */}
-            {remoteCount === 0 && isCallActive && (
-              <div className="col-span-full h-80 bg-black/40 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-white/5 relative overflow-hidden group">
-                <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="w-16 h-16 mb-4 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20 animate-pulse">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-                </div>
-                <h3 className="text-white font-bold text-lg mb-1">Awaiting Telemetry</h3>
-                <p className="text-gray-500 text-sm mb-6">No active incoming video streams detected.</p>
-                {onReconnect && (
-                  <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-[0_0_15px_rgba(37,99,235,0.3)]" onClick={onReconnect}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                    Refresh Uplink
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Remote Videos */}
-            {Array.from(remoteStreams.entries()).map(([id, stream]) => (
-              <div key={id} tabIndex={0} className="group bg-black rounded-2xl overflow-hidden aspect-video relative border border-white/10 shadow-lg ring-1 ring-white/5 hover:ring-blue-500/50 focus:outline-none focus:ring-blue-500/50 transition-all cursor-pointer">
-                <video
-                  ref={(el) => {
-                    if (el && el.srcObject !== stream) {
-                      el.srcObject = stream;
-                      el.play().catch(() => { });
-                    }
-                  }}
-                  autoPlay
-                  playsInline
-                  className="w-full h-full object-cover"
-                />
-
-                {/* Overlays */}
-                <div className="absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start">
-                  <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" /></svg>
-                    <span className="text-white text-xs font-bold tracking-wide">
-                      {peerNames[id] || `${id.slice(0, 8)}...`}
-                    </span>
+              {remoteCount === 0 && isCallActive && (
+                <div className="col-span-full h-80 bg-black/40 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-white/5 relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  <div className="w-16 h-16 mb-4 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20 animate-pulse">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                   </div>
-                  <div className="flex items-center gap-1.5 bg-emerald-500/20 backdrop-blur-md px-2.5 py-1 rounded-lg border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
-                    Sync
-                  </div>
+                  <h3 className="text-white font-bold text-lg mb-1">Awaiting Telemetry</h3>
+                  <p className="text-gray-500 text-sm mb-6">No active incoming video streams detected.</p>
+                  {onReconnect && (
+                    <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-[0_0_15px_rgba(37,99,235,0.3)]" onClick={onReconnect}>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                      Refresh Uplink
+                    </button>
+                  )}
                 </div>
+              )}
 
-                {/* Per-User Actions Hover */}
-                {onRemoteAction && (
-                  <div className="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex flex-col justify-center p-4 pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto">
-                    <div className="grid grid-cols-2 gap-2 w-full max-w-xs mx-auto">
-                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-blue-500/20 hover:text-blue-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.refresh') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.refresh')) { ToastMsgs.error('❌ Check permission: permission.peer.refresh'); return; } onRemoteAction('refreshPage', id); }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                        Refresh
-                      </button>
-                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-rose-500/20 hover:text-rose-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.kick') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.kick')) { ToastMsgs.error('❌ Check permission: permission.peer.kick'); return; } onRemoteAction('closeTab', id); }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                        Kick
-                      </button>
-                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-amber-500/20 hover:text-amber-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.cam') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.cam')) { ToastMsgs.error('❌ Check permission: permission.peer.cam'); return; } onRemoteAction('toggleCamera', id); }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                        Cam
-                      </button>
-                      <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-amber-500/20 hover:text-amber-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.mic') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.mic')) { ToastMsgs.error('❌ Check permission: permission.peer.mic'); return; } onRemoteAction('toggleMic', id); }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
-                        Mic
-                      </button>
+              {/* Remote Videos */}
+              {Array.from(remoteStreams.entries()).map(([id, stream]) => (
+                <div key={id} tabIndex={0} className="group bg-black rounded-2xl overflow-hidden aspect-video relative border border-white/10 shadow-lg ring-1 ring-white/5 hover:ring-blue-500/50 focus:outline-none focus:ring-blue-500/50 transition-all cursor-pointer">
+                  <video
+                    ref={(el) => {
+                      if (el && el.srcObject !== stream) {
+                        el.srcObject = stream;
+                        el.play().catch(() => { });
+                      }
+                    }}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+
+                  {/* Overlays */}
+                  <div className="absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start">
+                    <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" /></svg>
+                      <span className="text-white text-xs font-bold tracking-wide">
+                        {peerNames[id] || `${id.slice(0, 8)}...`}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-emerald-500/20 backdrop-blur-md px-2.5 py-1 rounded-lg border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                      Sync
                     </div>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {/* Per-User Actions Hover */}
+                  {onRemoteAction && (
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex flex-col justify-center p-4 pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto">
+                      <div className="grid grid-cols-2 gap-2 w-full max-w-xs mx-auto">
+                        <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-blue-500/20 hover:text-blue-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.refresh') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.refresh')) { ToastMsgs.error('❌ Check permission: permission.peer.refresh'); return; } onRemoteAction('refreshPage', id); }}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                          Refresh
+                        </button>
+                        <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-rose-500/20 hover:text-rose-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.kick') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.kick')) { ToastMsgs.error('❌ Check permission: permission.peer.kick'); return; } onRemoteAction('closeTab', id); }}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          Kick
+                        </button>
+                        <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-amber-500/20 hover:text-amber-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.cam') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.cam')) { ToastMsgs.error('❌ Check permission: permission.peer.cam'); return; } onRemoteAction('toggleCamera', id); }}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                          Cam
+                        </button>
+                        <button className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-amber-500/20 hover:text-amber-400 text-gray-300 text-xs font-bold transition-colors border border-white/5 ${!isAdmin && !hasPerm('permission.peer.mic') ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={() => { if (!isAdmin && !hasPerm('permission.peer.mic')) { ToastMsgs.error('❌ Check permission: permission.peer.mic'); return; } onRemoteAction('toggleMic', id); }}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                          Mic
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           ) : (
             <div className="flex flex-col h-full space-y-6">
@@ -339,6 +342,9 @@ const VideoModal = ({
 
 // ─── Main Component ──────────────────────────────────────────
 const SfuTest = (): JSX.Element => {
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'ADMIN';
+  
   // ─── State ──────────────────────────────────────────────────
   const [selectedRows, setSelectedRows] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -348,11 +354,66 @@ const SfuTest = (): JSX.Element => {
   const [activeDetailTab, setActiveDetailTab] = useState<'producers' | 'consumers'>('producers');
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [selectedUserIdForPerms, setSelectedUserIdForPerms] = useState<string | null>(null);
-  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'permissions'>('users');
+  const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'permissions' | 'deletedUsers'>('users');
   const [editingPermission, setEditingPermission] = useState<{ id?: string; name: string; description: string } | null>(null);
+  const [editingUser, setEditingUser] = useState<{ id?: string; username: string; email: string; role: string } | null>(null);
+  const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
+  const [createUserForm, setCreateUserForm] = useState({ username: '', email: '', password: '', role: 'USER' });
+  const [adminEditingUserPassword, setAdminEditingUserPassword] = useState<{ id: string; username: string } | null>(null);
+  const [adminNewPassword, setAdminNewPassword] = useState('');
 
-  const { user } = useAuthStore();
-  const isAdmin = user?.role === 'ADMIN';
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [newProfilePassword, setNewProfilePassword] = useState('');
+  const [newProfileUsername, setNewProfileUsername] = useState('');
+  const [newProfileFirstName, setNewProfileFirstName] = useState('');
+  const [newProfileLastName, setNewProfileLastName] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+  const updatePasswordMut = useUpdatePasswordMutation();
+  const updateProfileMut = useUpdateProfileMutation();
+  const adminUpdateUserMut = useAdminUpdateUserMutation();
+  const deleteMeMut = useDeleteMeMutation();
+  const restoreUserMut = useRestoreUserMutation();
+  const createUserMut = useCreateUserMutation();
+
+  const { data: deletedUsersData, isLoading: isDeletedUsersLoading } = useGetDeletedUsers({ enabled: isAdmin && isUserModalOpen });
+
+  const handleProfileSubmit = () => {
+    if (!user?.id) return;
+    setIsUpdatingPassword(true);
+
+    const promises = [];
+    if (newProfilePassword) {
+      promises.push(updatePasswordMut.mutateAsync({ id: user.id, password: newProfilePassword }));
+    }
+    const profileUpdates: any = {};
+    if (newProfileUsername && newProfileUsername !== user.name) profileUpdates.username = newProfileUsername;
+    if (newProfileFirstName !== (user as any).firstName && newProfileFirstName !== '') profileUpdates.firstName = newProfileFirstName;
+    if (newProfileLastName !== (user as any).lastName && newProfileLastName !== '') profileUpdates.lastName = newProfileLastName;
+
+    if (Object.keys(profileUpdates).length > 0) {
+      promises.push(updateProfileMut.mutateAsync(profileUpdates));
+    }
+
+    if (promises.length === 0) {
+      setIsUpdatingPassword(false);
+      setIsProfileModalOpen(false);
+      return;
+    }
+
+    Promise.all(promises).then(() => {
+      ToastMsgs.success("Profile updated successfully!");
+      setIsProfileModalOpen(false);
+      setNewProfilePassword('');
+      setIsUpdatingPassword(false);
+      refreshUserSession();
+    }).catch((err: any) => {
+      ToastMsgs.error(err?.response?.data?.message || "Failed to update profile");
+      setIsUpdatingPassword(false);
+    });
+  };
+
+  const navigate = useNavigate();
 
   const hasPerm = useCallback((perm: string) => {
     if (!user) return false;
@@ -1146,7 +1207,7 @@ const SfuTest = (): JSX.Element => {
   const { data = [], isLoading: isFetching, refetch, error } = useRooms();
   const { data: usersData = [], isLoading: isUsersLoading } = useUsersList({ enabled: isAdmin && isUserModalOpen });
   const { data: permissionsData = [] } = useAllPermissions({ enabled: isAdmin && isUserModalOpen });
-  
+
   const assignPermission = useAssignPermission();
   const removePermission = useRemovePermission();
   const createPermission = useCreatePermission();
@@ -1523,7 +1584,7 @@ const SfuTest = (): JSX.Element => {
             {row.permissions?.length > 0 ? row.permissions.map((p: any) => (
               <div key={p.id} className="text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1.5 group transition-colors hover:bg-emerald-500/20">
                 {p.name}
-                <button 
+                <button
                   onClick={(e) => { e.stopPropagation(); removePermission.mutate({ userId: row.id, permissionId: p.id }); }}
                   className="opacity-0 group-hover:opacity-100 text-emerald-500 hover:text-rose-400 transition-all"
                   title="Revoke"
@@ -1535,7 +1596,7 @@ const SfuTest = (): JSX.Element => {
               <span className="text-[10px] text-gray-500 italic">None assigned</span>
             )}
           </div>
-          <select 
+          <select
             className="w-full bg-black border border-white/10 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer"
             onChange={(e) => {
               if (e.target.value) {
@@ -1563,7 +1624,7 @@ const SfuTest = (): JSX.Element => {
             {row.rooms?.length > 0 ? row.rooms.map((r: any) => (
               <div key={r.id} className="text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded flex items-center gap-1.5 group transition-colors hover:bg-indigo-500/20">
                 {r.roomId}
-                <button 
+                <button
                   onClick={(e) => { e.stopPropagation(); deleteRoom.mutate(r.roomId); }}
                   className="opacity-0 group-hover:opacity-100 text-indigo-400 hover:text-rose-400 transition-all"
                   title="Delete Room"
@@ -1575,7 +1636,7 @@ const SfuTest = (): JSX.Element => {
               <span className="text-[10px] text-gray-500 italic">No rooms</span>
             )}
           </div>
-          <input 
+          <input
             type="text"
             placeholder="+ Create Room ID"
             className="w-full bg-black border border-white/10 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-indigo-500/50"
@@ -1599,7 +1660,7 @@ const SfuTest = (): JSX.Element => {
             {row.grantedRooms?.length > 0 ? row.grantedRooms.map((r: any) => (
               <div key={r.id} className="text-[10px] font-bold bg-teal-500/10 text-teal-400 border border-teal-500/20 px-2 py-0.5 rounded flex items-center gap-1.5 group transition-colors hover:bg-teal-500/20">
                 {r.roomId}
-                <button 
+                <button
                   onClick={(e) => { e.stopPropagation(); removeGrantedRoom.mutate({ userId: row.id, roomId: r.roomId }); }}
                   className="opacity-0 group-hover:opacity-100 text-teal-400 hover:text-rose-400 transition-all"
                   title="Revoke Access"
@@ -1611,7 +1672,7 @@ const SfuTest = (): JSX.Element => {
               <span className="text-[10px] text-gray-500 italic">No rooms granted</span>
             )}
           </div>
-          <select 
+          <select
             className="w-full bg-black border border-white/10 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-teal-500/50 cursor-pointer"
             onChange={(e) => {
               if (e.target.value) {
@@ -1627,6 +1688,43 @@ const SfuTest = (): JSX.Element => {
               <option key={r.room_id} value={r.room_id}>{r.room_id}</option>
             ))}
           </select>
+        </div>
+      )
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (value: any, row: any) => (
+        <div className="flex gap-1.5">
+          <button
+            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-blue-500/20 text-gray-400 hover:text-blue-400 flex items-center justify-center transition-colors"
+            title="Edit User Profile"
+            onClick={(e) => { e.stopPropagation(); setEditingUser({ id: row.id, username: row.username, email: row.email, role: row.role }); }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+          </button>
+          <button
+            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-amber-500/20 text-gray-400 hover:text-amber-400 flex items-center justify-center transition-colors"
+            title="Change Password"
+            onClick={(e) => { e.stopPropagation(); setAdminEditingUserPassword({ id: row.id, username: row.username }); }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+          </button>
+          <button
+            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 flex items-center justify-center transition-colors"
+            title="Delete User"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (confirm(`Are you sure you want to delete user ${row.username}?`)) {
+                adminUpdateUserMut.mutate({ id: row.id, data: { isActive: false } }, {
+                  onSuccess: () => ToastMsgs.success('User deleted successfully'),
+                  onError: (err: any) => ToastMsgs.error(err?.response?.data?.message || 'Failed to delete user')
+                });
+              }
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          </button>
         </div>
       )
     }
@@ -1660,14 +1758,14 @@ const SfuTest = (): JSX.Element => {
       label: 'Actions',
       render: (value: any, row: any) => (
         <div className="flex gap-2">
-          <button 
+          <button
             className="w-8 h-8 rounded-lg bg-white/5 hover:bg-blue-500/20 text-gray-400 hover:text-blue-400 flex items-center justify-center transition-colors"
             title="Edit Permission"
             onClick={(e) => { e.stopPropagation(); setEditingPermission({ id: row.id, name: row.name, description: row.description || '' }); }}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
           </button>
-          <button 
+          <button
             className="w-8 h-8 rounded-lg bg-white/5 hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 flex items-center justify-center transition-colors"
             title="Delete Permission"
             onClick={(e) => {
@@ -1780,6 +1878,15 @@ const SfuTest = (): JSX.Element => {
               <div className="w-11 h-6 bg-gray-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 border border-white/10"></div>
             </label>
             <div className="w-px h-8 bg-white/10 mx-2"></div>
+
+            <button
+              onClick={() => setIsProfileModalOpen(true)}
+              className="flex items-center gap-2 text-xs px-3 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 hover:text-purple-300 rounded-xl transition-all border border-purple-500/20 font-bold uppercase tracking-wider"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+              Profile
+            </button>
+            <div className="w-px h-8 bg-white/10 mx-2"></div>
             {/* Logout button */}
             <button
               id="logout-btn"
@@ -1891,7 +1998,7 @@ const SfuTest = (): JSX.Element => {
                 </div>
                 <h3 className="text-sm font-bold text-white">Deploy Node</h3>
               </div>
-              
+
               <div
                 className={`bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col justify-center items-center text-center transition-colors group ${!isAdmin && !hasPerm('permission.users.manage') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/[0.04] cursor-pointer'}`}
                 onClick={() => {
@@ -2305,19 +2412,25 @@ const SfuTest = (): JSX.Element => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
             </button>
           </div>
-          
+
           <div className="flex border-b border-white/5 bg-[#111] px-6 pt-2">
-            <button 
+            <button
               className={`pb-3 px-4 text-sm font-bold border-b-2 transition-colors ${activeAdminTab === 'users' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
               onClick={() => setActiveAdminTab('users')}
             >
               Manage Users
             </button>
-            <button 
+            <button
               className={`pb-3 px-4 text-sm font-bold border-b-2 transition-colors ${activeAdminTab === 'permissions' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
               onClick={() => setActiveAdminTab('permissions')}
             >
               Manage Permissions
+            </button>
+            <button
+              className={`pb-3 px-4 text-sm font-bold border-b-2 transition-colors ${activeAdminTab === 'deletedUsers' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+              onClick={() => setActiveAdminTab('deletedUsers')}
+            >
+              Deleted Users
             </button>
           </div>
 
@@ -2328,27 +2441,38 @@ const SfuTest = (): JSX.Element => {
                   <span className="loading loading-spinner loading-lg text-emerald-500"></span>
                 </div>
               ) : (
-              <div className="custom-dark-table">
-                <Table
-                  columns={userColumns}
-                  data={usersData || []}
-                  rowKey="id"
-                  showSearch
-                  showPagination
-                  itemsPerPage={5}
-                  zebra={false}
-                />
-              </div>
+                <div className="flex flex-col h-full">
+                  <div className="flex justify-end mb-4">
+                    <button 
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                      onClick={() => setIsCreateUserModalOpen(true)}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                      Add User
+                    </button>
+                  </div>
+                  <div className="custom-dark-table flex-1 overflow-y-auto">
+                    <Table
+                      columns={userColumns}
+                      data={usersData || []}
+                      rowKey="id"
+                      showSearch
+                      showPagination
+                      itemsPerPage={5}
+                      zebra={false}
+                    />
+                  </div>
+                </div>
               )
-            ) : (
+            ) : activeAdminTab === 'permissions' ? (
               <div className="flex flex-col h-full">
                 <div className="mb-6 bg-white/[0.02] border border-white/10 rounded-xl p-5">
                   <h4 className="text-white font-bold mb-4">{editingPermission?.id ? 'Edit Permission' : 'Create New Permission'}</h4>
                   <div className="flex gap-4 items-end">
                     <div className="flex-1">
                       <label className="text-xs text-gray-400 mb-1 block">Permission Name</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         className="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
                         placeholder="e.g., MANAGE_ROOMS"
                         value={editingPermission?.name || ''}
@@ -2357,8 +2481,8 @@ const SfuTest = (): JSX.Element => {
                     </div>
                     <div className="flex-[2]">
                       <label className="text-xs text-gray-400 mb-1 block">Description</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         className="w-full bg-black border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
                         placeholder="Brief description of what this permission allows..."
                         value={editingPermission?.description || ''}
@@ -2367,14 +2491,14 @@ const SfuTest = (): JSX.Element => {
                     </div>
                     <div className="flex gap-2">
                       {editingPermission?.id && (
-                        <button 
+                        <button
                           className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white font-bold transition-colors"
                           onClick={() => setEditingPermission(null)}
                         >
                           Cancel
                         </button>
                       )}
-                      <button 
+                      <button
                         className="px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={!editingPermission?.name}
                         onClick={() => {
@@ -2404,6 +2528,46 @@ const SfuTest = (): JSX.Element => {
                   />
                 </div>
               </div>
+            ) : (
+              isDeletedUsersLoading ? (
+                <div className="flex justify-center items-center py-20">
+                  <span className="loading loading-spinner loading-lg text-rose-500"></span>
+                </div>
+              ) : (
+                <div className="custom-dark-table">
+                  <Table
+                    columns={[
+                      { key: 'username', label: 'User', render: (val: any, row: any) => row.username || row.email },
+                      { key: 'role', label: 'Role' },
+                      {
+                        key: 'actions',
+                        label: 'Actions',
+                        render: (val: any, row: any) => (
+                          <button
+                            onClick={() => {
+                              if (confirm('Are you sure you want to restore this user?')) {
+                                restoreUserMut.mutate(row.id, {
+                                  onSuccess: () => ToastMsgs.success('User restored'),
+                                  onError: (e: any) => ToastMsgs.error(e?.response?.data?.message || 'Error restoring user')
+                                });
+                              }
+                            }}
+                            className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded hover:bg-emerald-500/20 transition-colors"
+                          >
+                            Restore
+                          </button>
+                        )
+                      }
+                    ]}
+                    data={deletedUsersData || []}
+                    rowKey="id"
+                    showSearch
+                    showPagination
+                    itemsPerPage={5}
+                    zebra={false}
+                  />
+                </div>
+              )
             )}
           </div>
         </div>
@@ -2411,6 +2575,248 @@ const SfuTest = (): JSX.Element => {
       </dialog>
 
       {/* Deep style overrides for generic Table component to enforce dark Cyberpunk aesthetic */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#111115] border border-white/10 rounded-2xl w-[90vw] max-w-md overflow-hidden shadow-2xl p-6 relative">
+            <h2 className="text-xl font-bold text-white mb-4">My Account</h2>
+            <div className="flex gap-4 mb-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-400 mb-1">First Name</label>
+                <input
+                  type="text"
+                  value={newProfileFirstName || (user as any)?.firstName || ''}
+                  onChange={(e) => setNewProfileFirstName(e.target.value)}
+                  placeholder="First Name"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-400 mb-1">Last Name</label>
+                <input
+                  type="text"
+                  value={newProfileLastName || (user as any)?.lastName || ''}
+                  onChange={(e) => setNewProfileLastName(e.target.value)}
+                  placeholder="Last Name"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all"
+                />
+              </div>
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-400 mb-1">Username</label>
+              <input
+                type="text"
+                value={newProfileUsername || user?.name || ''}
+                onChange={(e) => setNewProfileUsername(e.target.value)}
+                placeholder="Enter new username"
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all"
+              />
+            </div>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-400 mb-1">New Password (leave blank to keep)</label>
+              <input
+                type="password"
+                value={newProfilePassword}
+                onChange={(e) => setNewProfilePassword(e.target.value)}
+                placeholder="Enter new password"
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all"
+              />
+            </div>
+            <div className="flex justify-between items-center mt-4">
+              <button
+                onClick={() => {
+                  if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+                    deleteMeMut.mutate(undefined, {
+                      onSuccess: () => {
+                        ToastMsgs.success('Account deleted successfully');
+                        window.location.href = '/talha/login';
+                      },
+                      onError: (e: any) => ToastMsgs.error(e?.response?.data?.message || 'Error deleting account')
+                    });
+                  }
+                }}
+                className="text-rose-400 text-sm font-bold hover:text-rose-300 transition-colors"
+              >
+                Delete Account
+              </button>
+              <div className="flex gap-3">
+                <button onClick={() => setIsProfileModalOpen(false)} className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold transition-colors">Cancel</button>
+                <button
+                  onClick={handleProfileSubmit}
+                  disabled={isUpdatingPassword}
+                  className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold transition-all shadow-[0_0_15px_rgba(147,51,234,0.3)]"
+                >
+                  {isUpdatingPassword ? 'Updating...' : 'Update Profile'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Reset Password Modal */}
+      {adminEditingUserPassword && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#111115] border border-white/10 rounded-2xl w-[90vw] max-w-md overflow-hidden shadow-2xl p-6 relative">
+            <h2 className="text-xl font-bold text-white mb-4">Reset Password for {adminEditingUserPassword.username}</h2>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-400 mb-1">New Password</label>
+              <input
+                type="password"
+                value={adminNewPassword}
+                onChange={(e) => setAdminNewPassword(e.target.value)}
+                placeholder="Enter new password"
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 transition-all"
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => { setAdminEditingUserPassword(null); setAdminNewPassword(''); }} className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold transition-colors">Cancel</button>
+              <button
+                onClick={() => {
+                  updatePasswordMut.mutate({ id: adminEditingUserPassword.id, password: adminNewPassword }, {
+                    onSuccess: () => {
+                      ToastMsgs.success("Password updated successfully");
+                      setAdminEditingUserPassword(null);
+                      setAdminNewPassword('');
+                    },
+                    onError: (err: any) => ToastMsgs.error(err?.response?.data?.message || "Failed to update password")
+                  });
+                }}
+                disabled={!adminNewPassword || updatePasswordMut.isPending}
+                className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold transition-all shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+              >
+                {updatePasswordMut.isPending ? 'Saving...' : 'Save Password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create User Modal */}
+      {isCreateUserModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#111115] border border-white/10 rounded-2xl w-[90vw] max-w-md overflow-hidden shadow-2xl p-6 relative">
+            <h2 className="text-xl font-bold text-white mb-4">Create New User</h2>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-400 mb-1">Username</label>
+              <input
+                type="text"
+                value={createUserForm.username}
+                onChange={(e) => setCreateUserForm({ ...createUserForm, username: e.target.value })}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-400 mb-1">Email</label>
+              <input
+                type="email"
+                value={createUserForm.email}
+                onChange={(e) => setCreateUserForm({ ...createUserForm, email: e.target.value })}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-400 mb-1">Password</label>
+              <input
+                type="password"
+                value={createUserForm.password}
+                onChange={(e) => setCreateUserForm({ ...createUserForm, password: e.target.value })}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+              />
+            </div>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-400 mb-1">Role</label>
+              <select
+                value={createUserForm.role}
+                onChange={(e) => setCreateUserForm({ ...createUserForm, role: e.target.value })}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all cursor-pointer"
+              >
+                <option value="USER">User</option>
+                <option value="ADMIN">Admin</option>
+              </select>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => { setIsCreateUserModalOpen(false); setCreateUserForm({ username: '', email: '', password: '', role: 'USER' }); }} className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold transition-colors">Cancel</button>
+              <button
+                onClick={() => {
+                  createUserMut.mutate(createUserForm, {
+                    onSuccess: () => {
+                      ToastMsgs.success("User created successfully");
+                      setIsCreateUserModalOpen(false);
+                      setCreateUserForm({ username: '', email: '', password: '', role: 'USER' });
+                    },
+                    onError: (err: any) => {
+                      ToastMsgs.error(err?.response?.data?.message || "Failed to create user");
+                    }
+                  });
+                }}
+                disabled={createUserMut.isPending || !createUserForm.username || !createUserForm.email || !createUserForm.password}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+              >
+                {createUserMut.isPending ? 'Creating...' : 'Create User'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal (Admin) */}
+      {editingUser && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#111115] border border-white/10 rounded-2xl w-[90vw] max-w-md overflow-hidden shadow-2xl p-6 relative">
+            <h2 className="text-xl font-bold text-white mb-4">Edit User</h2>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-400 mb-1">Username</label>
+              <input
+                type="text"
+                value={editingUser.username}
+                onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-400 mb-1">Email</label>
+              <input
+                type="email"
+                value={editingUser.email}
+                onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+              />
+            </div>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-400 mb-1">Role</label>
+              <select
+                value={editingUser.role}
+                onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all cursor-pointer"
+              >
+                <option value="USER">User</option>
+                <option value="ADMIN">Admin</option>
+              </select>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setEditingUser(null)} className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold transition-colors">Cancel</button>
+              <button
+                onClick={() => {
+                  adminUpdateUserMut.mutate({ id: editingUser.id!, data: { username: editingUser.username, email: editingUser.email, role: editingUser.role } }, {
+                    onSuccess: () => {
+                      ToastMsgs.success("User updated successfully");
+                      setEditingUser(null);
+                    },
+                    onError: (err: any) => {
+                      ToastMsgs.error(err?.response?.data?.message || "Failed to update user");
+                    }
+                  });
+                }}
+                disabled={adminUpdateUserMut.isPending}
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold transition-all shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+              >
+                {adminUpdateUserMut.isPending ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .custom-dark-table {
            --p: 217 90% 61%; /* primary blue */
