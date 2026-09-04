@@ -98,6 +98,16 @@ export const updateUser = catchAsync(async (req, res, next) => {
         return next(new AppError('User not found', 404));
     }
 
+    // Prevent users (admins) from changing their own role or deactivating themselves via this endpoint
+    if (req.user && req.user.id === id) {
+        if (role !== undefined && role !== userToUpdate.role) {
+            return next(new AppError('You cannot change your own role', 403));
+        }
+        if (isActive !== undefined && isActive === false && userToUpdate.isActive === true) {
+            return next(new AppError('You cannot deactivate your own account', 403));
+        }
+    }
+
     const updateData = {};
 
     if (username !== undefined) {
@@ -145,6 +155,10 @@ export const updateUser = catchAsync(async (req, res, next) => {
 });
 
 export const deleteMe = catchAsync(async (req, res, next) => {
+    if (req.user && req.user.role === 'ADMIN') {
+        return next(new AppError('Admins cannot delete their own accounts directly.', 403));
+    }
+
     // Soft delete
     await prisma.user.update({
         where: { id: req.user.id },

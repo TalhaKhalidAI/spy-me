@@ -1710,25 +1710,27 @@ const SfuTest = (): JSX.Element => {
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
           </button>
-          <button
-            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 flex items-center justify-center transition-colors"
-            title="Delete User"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (confirm(`Are you sure you want to delete user ${row.username}?`)) {
-                adminUpdateUserMut.mutate({ id: row.id, data: { isActive: false } }, {
-                  onSuccess: () => ToastMsgs.success('User deleted successfully'),
-                  onError: (err: any) => ToastMsgs.error(err?.response?.data?.message || 'Failed to delete user')
-                });
-              }
-            }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-          </button>
+          {row.id !== user?.id && (
+            <button
+              className="w-8 h-8 rounded-lg bg-white/5 hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 flex items-center justify-center transition-colors"
+              title="Delete User"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (confirm(`Are you sure you want to delete user ${row.username}?`)) {
+                  adminUpdateUserMut.mutate({ id: row.id, data: { isActive: false } }, {
+                    onSuccess: () => ToastMsgs.success('User deleted successfully'),
+                    onError: (err: any) => ToastMsgs.error(err?.response?.data?.message || 'Failed to delete user')
+                  });
+                }
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            </button>
+          )}
         </div>
       )
     }
-  ], [permissionsData, assignPermission, removePermission, createRoom, deleteRoom, addGrantedRoom, removeGrantedRoom, roomsData]);
+  ], [permissionsData, assignPermission, removePermission, createRoom, deleteRoom, addGrantedRoom, removeGrantedRoom, roomsData, user?.id]);
 
   const permissionColumns = useMemo(() => [
     {
@@ -2787,11 +2789,13 @@ const SfuTest = (): JSX.Element => {
               <select
                 value={editingUser.role}
                 onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
-                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all cursor-pointer"
+                disabled={editingUser.id === user?.id}
+                className={`w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all ${editingUser.id === user?.id ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
                 <option value="USER">User</option>
                 <option value="ADMIN">Admin</option>
               </select>
+              {editingUser.id === user?.id && <p className="text-xs text-amber-500/70 mt-1">You cannot change your own role.</p>}
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={() => setEditingUser(null)} className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold transition-colors">Cancel</button>
