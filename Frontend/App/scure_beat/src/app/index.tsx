@@ -41,6 +41,18 @@ export default function HomeScreen() {
     }
   };
 
+  const handleToggleCamera = () => {
+    if (Platform.OS === 'android') {
+      SpyMeNativeModule?.toggleCamera();
+    }
+  };
+
+  const handleToggleMic = () => {
+    if (Platform.OS === 'android') {
+      SpyMeNativeModule?.toggleMic();
+    }
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -54,6 +66,8 @@ export default function HomeScreen() {
         <ThemedView type="backgroundElement" style={styles.stepContainer}>
           <Button title="Start Foreground Service" color="#10b981" onPress={handleStartUplink} />
           <Button title="Stop Foreground Service" color="#ef4444" onPress={handleStopUplink} />
+          <Button title="Toggle Camera" color="#3b82f6" onPress={handleToggleCamera} />
+          <Button title="Toggle Mic" color="#f59e0b" onPress={handleToggleMic} />
         </ThemedView>
 
         <ThemedText type="code" style={styles.code}>
