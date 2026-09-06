@@ -561,11 +561,20 @@ const SfuTestPage = (_props: Props) => {
       if (wsRef.current?.connected) return;
 
       const searchParams = new URLSearchParams(window.location.search);
-      const urlToken = searchParams.get('token') || '';
+      let activeToken = searchParams.get('token');
+      if (!activeToken) {
+        activeToken = useAuthStore.getState().token;
+      }
+      if (!activeToken) {
+        try {
+          const raw = localStorage.getItem('auth-storage');
+          if (raw) activeToken = JSON.parse(raw)?.state?.token;
+        } catch {}
+      }
 
       const ws = new WebSocketClient({
         url: import.meta.env.VITE_WS_URL || window.location.origin,
-        token: urlToken,
+        token: activeToken || '',
         autoConnect: true,
         reconnectionAttempts: 9999, // keep trying infinitely
         reconnectionDelay: 2000,

@@ -1189,6 +1189,19 @@ const SfuTest = (): JSX.Element => {
     }
   }, [leaveCall, establishDevice, selectedRoomId]);
 
+  // ─── Disconnect Handling ─────────────────────────────────────
+  // If the server disconnects while we are in a call, the server loses all
+  // Mediasoup state. We must forcibly close the local call to avoid a "zombie" state.
+  useEffect(() => {
+    if (!wsConnected && isCallActive) {
+      console.warn("⚠️ Server connection lost during active call. Forcibly dropping call to prevent headless state.");
+      ToastMsgs.error("Connection to server lost. The call has been dropped.");
+      leaveCall();
+      setIsVideoModalOpen(false);
+    }
+  }, [wsConnected, isCallActive, leaveCall]);
+
+
   const sendRemoteAction = useCallback(async (event: string, targetSocketId?: string, payload: any = {}) => {
     if (!wsClientRef.current || !selectedRoomId) return;
     try {

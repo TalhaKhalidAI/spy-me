@@ -270,6 +270,20 @@ export class WebSocketClient {
     this.socket.on('transportError', (data: WSTransportError) => {
       this.emitEvent('transportError', data);
     });
+
+    // Re-attach any dynamic events that were registered via on()
+    this.eventCallbacks.forEach((callbacks, eventName) => {
+      const builtInEvents = [
+        'connect', 'connect_error', 'disconnect', 'reconnect',
+        'reconnect_attempt', 'reconnect_error', 'reconnect_failed',
+        'newProducer', 'producerClosed', 'clientLeft', 'transportConnected', 'transportError'
+      ];
+      if (!builtInEvents.includes(eventName)) {
+        callbacks.forEach((cb) => {
+          this.socket?.on(eventName, cb as any);
+        });
+      }
+    });
   }
 
   // ─── Event Handling ──────────────────────────────────────
