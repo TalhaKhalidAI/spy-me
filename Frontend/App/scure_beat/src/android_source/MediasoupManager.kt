@@ -71,6 +71,22 @@ class MediasoupManager(private val context: Context) {
         // Track if we've initialized transports
         private var isInitialized = false
 
+        // ✅ ============================================================
+        // ✅ ADDED: Check if socket is connected
+        // ✅ ============================================================
+        fun isSocketConnected(): Boolean {
+            return socket?.connected() == true
+        }
+
+        // ✅ ============================================================
+        // ✅ ADDED: Force reconnect
+        // ✅ ============================================================
+        fun forceReconnect() {
+            Log.i(TAG, "🔄 Force reconnect for room: $roomId")
+            disconnect()
+            connect()
+        }
+
         val sendTransportListener =
             object : SendTransport.Listener {
                 override fun onConnect(
@@ -350,8 +366,11 @@ class MediasoupManager(private val context: Context) {
 
         private fun handleReconnect() {
             SpyMeModule.emitLog("🔄 Handling reconnect for $roomId")
-            val savedCameraState = currentCameraState
-            val savedMicState = isMicMuted
+
+            // ✅ DON'T use saved state from session creation
+            // ✅ Read CURRENT state directly from MediasoupManager
+            val currentCameraState = this@MediasoupManager.currentCameraState
+            val currentMicState = this@MediasoupManager.isMicMuted
 
             val joinPayload =
                 JSONObject().apply {
@@ -370,17 +389,57 @@ class MediasoupManager(private val context: Context) {
                     createSendTransport()
                     createRecvTransport()
 
-                    if (savedCameraState != CameraState.OFF) {
+                    // ✅ Use CURRENT state, not saved state
+                    if (currentCameraState != CameraState.OFF) {
                         startVideoProducer()
+                    } else {
+                        SpyMeModule.emitLog("📹 Camera is OFF - not restarting")
                     }
-                    if (!savedMicState) {
+
+                    if (!currentMicState) {
                         startAudioProducer()
+                    } else {
+                        SpyMeModule.emitLog("🎙️ Mic is MUTED - not restarting")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to recreate device on reconnect", e)
                 }
             }
         }
+
+        // private fun handleReconnect() {
+        //     SpyMeModule.emitLog("🔄 Handling reconnect for $roomId")
+        //     val savedCameraState = currentCameraState
+        //     val savedMicState = isMicMuted
+
+        //     val joinPayload =
+        //         JSONObject().apply {
+        //             put("roomId", roomId)
+        //             put("clientName", username)
+        //             put("isReconnect", true)
+        //         }
+        //     socket?.emit("joinRoom", joinPayload)
+
+        //     val rtpCaps = savedRtpCapabilities
+        //     if (rtpCaps != null) {
+        //         try {
+        //             clearTransports()
+        //             device = org.mediasoup.droid.Device()
+        //             device?.load(rtpCaps, null)
+        //             createSendTransport()
+        //             createRecvTransport()
+
+        //             if (savedCameraState != CameraState.OFF) {
+        //                 startVideoProducer()
+        //             }
+        //             if (!savedMicState) {
+        //                 startAudioProducer()
+        //             }
+        //         } catch (e: Exception) {
+        //             Log.e(TAG, "Failed to recreate device on reconnect", e)
+        //         }
+        //     }
+        // }
 
         fun fetchRouterCapabilities() {
             socket?.emit(
@@ -858,5 +917,35 @@ class MediasoupManager(private val context: Context) {
         } catch (e: Exception) {}
         sessions.values.forEach { it.disconnect() }
         sessions.clear()
+    }
+
+    // ✅ ============================================================
+    // ✅ ADDED: Check if any session has active socket
+    // ✅ ============================================================
+    fun hasActiveSessions(): Boolean {
+        return sessions.values.any { it.isSocketConnected() }
+    }
+
+    // ✅ ============================================================
+    // ✅ ADDED: Get session by room ID
+    // ✅ ============================================================
+    fun getSession(roomId: String): RoomSession? = sessions[roomId]
+
+    // ✅ ============================================================
+    // ✅ ADDED: Reconnect all sessions
+    // ✅ ============================================================
+    fun reconnectAll() {
+        sessions.values.forEach {
+            if (!it.isSocketConnected()) {
+                it.forceReconnect()
+            }
+        }
+    }
+
+    // ✅ ============================================================
+    // ✅ ADDED: Force reconnect a specific room
+    // ✅ ============================================================
+    fun reconnectRoom(roomId: String) {
+        sessions[roomId]?.forceReconnect()
     }
 }

